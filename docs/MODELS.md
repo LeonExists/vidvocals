@@ -24,7 +24,7 @@ Build box: Linux, no GPU, 4 shared CPU cores. Every number below says whether it
 
 | Stage | Fast | Balanced | Best | Verified here? |
 |---|---|---|---|---|
-| **Vocal separation** (44.1 kHz stereo) | BS-RoFormer **Resurrection** (unwa), 51 M params, 204 MB | **Mel-Band RoFormer Kim** (KimberleyJSN), 228 M params, 913 MB | **Ensemble: Kim Mel-Band + BS-RoFormer viperx ep_317** (waveform average) | yes, all three: downloaded from GitHub releases, sha256 equals the HF original, run on CPU (section 6.1) |
+| **Vocal separation** (44.1 kHz stereo) | BS-RoFormer **Resurrection** (unwa), 51 M params, 204 MB, `num_overlap=1` | Resurrection, `num_overlap=2` | Resurrection, `num_overlap=4`; ensemble members (Kim Mel-Band, viperx ep_317, or the HF-only Leap Xe) are switchable but **not on by default** (section 2.2) | yes: Resurrection, Kim and viperx were downloaded from GitHub releases (sha256 equals the HF original) and run on CPU (sections 2.3, 6.1) |
 | **Activity / VAD** | energy gate on the vocal stem (+ silero-vad v6 as a speech label only) | same | same | yes, silero (pip-bundled weights) |
 | **Speaker embedding / clustering** | **ECAPA-TDNN (TaoRuijie, VoxCeleb2)** 192-d, own agglomerative clustering | same | same + optional WeSpeaker ResNet293-LM (HF) for clustering | ECAPA: yes (raw GitHub). ResNet293: not verifiable here (HF CDN) |
 | **Gender** | fused heads: **WavLM-Base+** (torchaudio) features + ECAPA embedding + F0 stats (torchfcpe), speaker-level vote | same | + tagger male/female-speech logits, longer context windows | yes: WavLM-Base+, ECAPA, torchfcpe all run here. Heads are trained by the eval agent |
@@ -33,8 +33,8 @@ Build box: Linux, no GPU, 4 shared CPU cores. Every number below says whether it
 | **Overlap separation** (2 speakers) | none | none | **SepFormer-WHAMR 16 kHz** (SpeechBrain), fallback **torchaudio ConvTasNet Libri2Mix (8 kHz)** | SepFormer: not verifiable here (HF CDN). ConvTasNet: yes |
 | Optional upgrades (user's PC, free) | – | audeering wav2vec2 age-gender (CC-BY-NC-SA) as an extra gender opinion | pyannote community-1 diarization with a free HF token; unwa BS-RoFormer Leap Xe or becruily deux as the separator | not verifiable here |
 
-**Estimated total time for a 10-minute video on the RTX 3080:** Fast **~1-1.5 min**, Balanced **~1.5-2 min**,
-Best **~3.5-5 min** (section 7). Peak VRAM per stage stays **under ~4 GB**, and stages are loaded one at a time and freed.
+**Estimated total time for a 10-minute video on the RTX 3080 (estimate, not measured):** Fast **~1-1.5 min**, Balanced **~1.5-2 min**,
+Best **~2.5-3.5 min** (section 7). Peak VRAM per stage stays **under ~4 GB**, and stages are loaded one at a time and freed.
 
 Exact identifiers, file names, URLs and sha256 are in `docs/models.json`.
 
@@ -56,9 +56,12 @@ Exact identifiers, file names, URLs and sha256 are in `docs/models.json`.
    speakers with gender metadata, screams/laughs/crying/coughs/moan-like emotional freeform) is **reachable here**
    and is a very good training/eval source for the eval agent.
 4. **Separation quality matters more than anything else downstream**: residual male voice that the separator
-   leaves in the background stem cannot be removed by gating. On our video-like test mix, RoFormers beat
-   HTDemucs by a wide margin (section 2.3).
-5. **All three separation defaults are free and reachable from GitHub releases** (TRvlvr/model_repo and
+   leaves in the background stem cannot be removed by gating. On our video-like test mix, **unwa's Resurrection BS-RoFormer
+   was clearly best** (11.3 dB vs 7.7-8.4 dB for Kim, viperx and HTDemucs in identical 8 s runs). It is also the smallest RoFormer,
+   so it is the default in all three presets. This is one synthetic mix: the eval agent should confirm on realistic mixes,
+   and the other verified models stay switchable. **Use the mirror config (`stft_hop_length: 441`).** The upstream HF yaml
+   (hop 512) measured 3.5 dB worse with the same weights.
+5. **The default separator and its two verified alternatives are free and reachable from GitHub releases** (TRvlvr/model_repo and
    nomadkaraoke/python-audio-separator `model-configs`), byte-identical to the HF uploads. We run them with
    **vendored ZFTurbo MSST model code (MIT)**, not audio-separator, to keep dependencies small (section 2.4).
 
@@ -93,17 +96,17 @@ they are not recommended as defaults. This is worth an experiment later.
 
 ### 2.2 Which one per preset, and why
 
-- **Fast: Resurrection BS-RoFormer (unwa).** It is the smallest RoFormer here (204 MB, 51 M params) and scored the
-  **best SDR on our video-like mix** (below). Its 17.8 s chunks make it the most FLOP-heavy per second of audio, but on a
-  3080 that is still about 1 minute per 10 minutes of audio at overlap 2 (section 7). Even faster:
-  run it with `num_overlap=1` (half the compute) or swap in HTDemucs-ft vocals (~10 s per 10 min, clearly worse).
-- **Balanced: Kim Mel-Band RoFormer.** It is the best-documented free vocal model (MIT, 11.01 Multisong), the base of most
-  community fine-tunes, and the cheapest RoFormer per second of audio (388 GFLOP/s). It is a "full" vocal model, so it keeps
-  breaths and other non-verbal sounds well (community consensus, **read**).
-- **Best: ensemble of Kim Mel-Band + viperx BS ep_317.** Averaging the waveforms of two different architectures is the
-  standard MVSEP trick (+0.2-0.4 dB **read**). Both files are free and verified here.
-  **Optional upgrade on the user's PC:** unwa Leap Xe voc (11.76 Multisong, HF only) as a third ensemble member
-  or as a replacement for viperx. It loads with the same `BSRoformer` class and the yaml from its repo.
+- **All presets: Resurrection BS-RoFormer (unwa)** with the GitHub-mirror yaml (hop 441). It is the smallest RoFormer here (204 MB,
+  51 M params), scored the best SDR on our video-like mix by a wide margin (table below), and is verified here.
+  The presets differ in `num_overlap`: **Fast 1** (≈20-30 s per 10 min on a 3080), **Balanced 2** (≈40-60 s), **Best 4** (≈80-120 s; more overlap
+  averages chunk-edge errors, a small gain that is usual for RoFormers, **read**).
+- **Why not Kim Mel-Band or viperx as defaults:** they lead the published Multisong numbers (Kim 11.01, viperx 10.87), but here both were
+  ~3.5 dB below Resurrection. **Averaging Kim with Resurrection made things worse** (8.67 dB vs 10.6 dB for Resurrection alone, 0-12 s).
+  Our mix (anechoic EARS voices + synthetic square-wave music) may favour Resurrection, so treat this as provisional. Keep Kim
+  (MIT) and viperx as verified, switchable alternatives, and let the eval agent decide with realistic mixes (real music/SFX beds).
+- **Optional (user's PC, HF only):** unwa **Leap Xe** voc (11.76 Multisong, same `BSRoformer` class, yaml from its repo), as a Best
+  replacement or ensemble member once evaluated.
+- **HTDemucs-ft vocals** is the emergency fallback (≈5-10 s per 10 min, clearly worse: 7.4 dB vs 10.6 dB).
 
 ### 2.3 Measured here (CPU, 2 threads, heavily shared box: CPU times are inflated, use them only relative to each other)
 
@@ -111,7 +114,22 @@ Test mix: 30 s, 44.1 kHz stereo. Vocals = EARS clips (female speech, male laugh,
 male speech, female scream, male pain vocalization) over synthetic music (square-wave chords, bass, kick, hats) +
 noise. `SDR` = 10·log10(‖ref‖²/‖ref−est‖²) of the vocal stem.
 
-RESULTS_SEP_TABLE
+| Model (config) | run | params | GFLOP / audio-s / pass | load s | CPU RTF* | peak RAM | **SDR vocals** |
+|---|---|---|---|---|---|---|---|
+| Resurrection BS (mirror yaml, hop 441) | 30 s, overlap 2 | 51.0 M | 599 | 0.7 | 22.6 | 3.0 GB | **11.77** (0-12 s: 10.60, 0-8 s: 11.46) |
+| Resurrection BS (mirror yaml, hop 441) | 8 s, overlap 1 | 51.0 M | 599 | 0.8 | 20.1 | 3.0 GB | **11.28** |
+| Resurrection BS (**upstream HF yaml, hop 512**) | 8 s, overlap 1 | 51.0 M | 484 | 0.7 | 14.5 | 2.8 GB | 7.79 |
+| BS-RoFormer viperx ep_317 | 8 s, overlap 1 | 159.8 M | 1087 | 2.1 | 11.2 | 3.1 GB | 7.68 |
+| Kim Mel-Band RoFormer | 12 s, overlap 1 | 228.2 M | 388 | 3.9 | 9.1 | 3.4 GB | 6.30 (0-8 s: 7.70) |
+| Kim Mel-Band RoFormer | 12 s, overlap 2 | 228.2 M | 388 | 3.0 | 14.8 | 3.4 GB | 6.35 (0-8 s: 7.84) |
+| HTDemucs-ft vocals (f7e0c4bc) | 30 s / 12 s | 42.0 M | 33 | 0.3 | 0.7-1.4 | 1.6 GB | 4.08 / 7.36 (0-8 s: 8.39) |
+| average(Resurrection, Kim) | 0-12 s | – | – | – | – | – | 8.67 |
+| mix itself as the estimate | 0-12 s | – | – | – | – | – | −4.2 |
+
+\* CPU real-time factor with 2 threads while the box was at load 10-18 from other agents. It is only useful to compare models with each other.
+Per-segment SDR, 0-12 s: Resurrection female speech 11.0 / male laugh 15.1 / female pain 9.4 dB; Kim 7.0 / **22.4** / 4.5 dB;
+HTDemucs 8.0 / 11.4 / 6.1 dB. Residual in vocal-free gaps: Resurrection −54.6 dBFS, Kim −59.5, HTDemucs −44.7.
+All three RoFormer checkpoints loaded with `strict=True` in the vendored MSST classes.
 
 GFLOP/audio-s = FLOPs of one forward pass over one chunk (torch `FlopCounterMode`, including SDPA attention) divided by
 chunk length. Multiply by `num_overlap` for the real cost.
@@ -304,10 +322,11 @@ def separate_vocals(model, cfg, mix, device, num_overlap=2, batch=1):
         out[:, s:s + C] += y.float() * w; cnt[s:s + C] += w
     voc = (out / cnt.clamp_min(1e-8))[:, pad:pad + T]
     return voc.cpu().numpy().T
-# Best preset: vocals = 0.5 * (sep(kim) + sep(viperx)); load/free one model at a time (del model; torch.cuda.empty_cache()).
+# Presets: Resurrection with num_overlap 1 / 2 / 4. If an ensemble is enabled, average the waveforms and load/free one model at a time
+# (del model; torch.cuda.empty_cache()).
 ```
-Notes: all three configs have `target_instrument: vocals/Vocals`, so `num_stems=1` → output = vocals. Use `num_overlap=2`
-(Kim's yaml says 1). On GPU a batch of 2-4 chunks is safe on 10 GB. Normalising the input is not needed (min_mean_abs only skips silence).
+Notes: all three configs have `target_instrument: vocals/Vocals` (note the capital V in viperx's yaml) and `num_stems=1`, so the
+output is vocals. Kim's yaml says `num_overlap: 1`; we pass our own. For Resurrection use the **GitHub-mirror yaml (hop 441)**, not the HF one. On GPU a batch of 2-4 chunks is safe on 10 GB. Normalising the input is not needed (min_mean_abs only skips silence).
 
 ### 6.2 HTDemucs-ft vocals (fallback / ultra-fast)
 ```python
@@ -401,7 +420,19 @@ Method: FLOPs per audio second measured here × `num_overlap`, divided by an eff
 for fp16-autocast transformer inference (29.8 TFLOPS fp16-with-fp32-accumulate tensor-core peak on GeForce Ampere, 40-60 %
 utilisation, plus STFT/iSTFT and Python overhead). Small models are dominated by overhead, so a floor of a few seconds applies.
 
-TIME_TABLE
+| Stage | Fast | Balanced | Best |
+|---|---|---|---|
+| ffmpeg decode to 44.1 kHz wav + resample copies | ~5 s | ~5 s | ~5 s |
+| Separation: Resurrection, 599 GFLOP/s × overlap × 600 s | ov 1: 359 TFLOP → **20-30 s** | ov 2: 719 TFLOP → **40-60 s** | ov 4: 1438 TFLOP → **80-120 s** |
+| (alternatives) Kim ov 2 / viperx ov 2 / HTDemucs | 466 TFLOP → 26-39 s / 1304 TFLOP → 72-109 s / ~5-10 s | | |
+| Model loads (SSD), all stages | ~5 s | ~8 s | ~10 s |
+| Energy VAD + silero + torchfcpe | ~3 s | ~3 s | ~3 s |
+| WavLM-Base+ (~10 GFLOP/s) + ECAPA (~1 GFLOP/s) on the vocal-active part (assume 50 %) | ~5 s | ~5 s | ~8 s (more windows) |
+| Tagger dymn10 / dymn20 | ~2 s | ~2 s | ~4 s |
+| Overlap: SepFormer-WHAMR16k on overlap regions (assume 10 % = 60 s) | – | – | ~5-10 s |
+| Clustering, decisions, peaks, preview m4a | ~5 s | ~5 s | ~5 s |
+| Export: gain envelope + AAC 256k encode + mux (`-c:v copy`) | ~10-15 s | ~10-15 s | ~10-15 s |
+| **Total for 10 min of video (estimate)** | **~1-1.5 min** | **~1.5-2 min** | **~2.5-3.5 min** (+30-110 s per extra ensemble member) |
 
 VRAM: RoFormers with batch 1-2 and an 8-18 s chunk in fp16 need ~1-2 GB of weights plus activations, **~2-4 GB peak (estimate)**.
 WavLM-Base+, ECAPA and the dymn models each need < 1.5 GB, SepFormer < 2 GB. With load → run → `del` + `torch.cuda.empty_cache()` per stage, the

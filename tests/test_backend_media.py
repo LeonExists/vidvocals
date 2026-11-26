@@ -47,6 +47,13 @@ def srcdir(tmp_path_factory):
     (d / "s.srt").write_text("1\n00:00:00,500 --> 00:00:02,000\nhello\n", encoding="utf-8")
     ff("-i", str(d / "v.mp4"), "-i", str(d / "a.m4a"), "-i", str(d / "s.srt"), "-map", "0:v", "-map", "1:a",
        "-map", "2:s", "-c:v", "copy", "-c:a", "copy", "-c:s", "srt", str(d / "subs.mkv"))
+    # click track for exact timing checks in other containers / codecs
+    ff("-f", "lavfi", "-i", "aevalsrc='if(between(t,0.5,0.52),0.8*sin(2*PI*1000*t),0)':s=48000:d=3.7",
+       str(d / "click.wav"))
+    for name, ac in (("pcm.mov", "pcm_s16le"), ("mp3.mkv", "libmp3lame"), ("pcm.mkv", "pcm_s16le"),
+                     ("pcm.avi", "pcm_s16le"), ("mp2.ts", "mp2"), ("aac.mkv", "aac")):
+        ff("-i", str(d / "v.mp4"), "-i", str(d / "click.wav"), "-map", "0:v", "-map", "1:a", "-c:v", "copy",
+           "-c:a", ac, str(d / name))
     ff("-f", "lavfi", "-i", "testsrc=size=160x120:rate=25:duration=2", "-f", "lavfi",
        "-i", "sine=f=300:d=2:sample_rate=44100", "-c:v", "libvpx-vp9", "-deadline", "realtime",
        "-b:v", "200k", "-c:a", "libopus", "-ac", "1", str(d / "mono.webm"))
@@ -68,10 +75,21 @@ def test_video_bit_identical_and_duration(srcdir, tmp_path, name):
     src, out, info, wav = roundtrip(srcdir, name, tmp_path)
     assert vmd5(src) == vmd5(out)
     a, b = decode(src), decode(out)
-    assert abs(len(a) - len(b)) <= 1024 + 64  # within one audio frame
+    assert abs(len(a) - len(b)) <= 1024  # decoded length within one AAC frame of the source
     oi = media.probe(out)
     assert oi["has_video"] and oi["audio"]
     assert abs((oi["duration"] or 0) - (info["duration"] or 0)) < 0.05
+
+
+@pytest.mark.parametrize("name", ["pcm.mov", "mp3.mkv", "pcm.mkv", "pcm.avi", "mp2.ts", "aac.mkv"])
+def test_containers_length_and_timing(srcdir, tmp_path, name):
+    """Decoded output length within one AAC frame of the source and the click at the same time
+    (encoder delay compensated where the container does not signal it)."""
+    src, out, info, _ = roundtrip(srcdir, name, tmp_path)
+    assert vmd5(src) == vmd5(out)
+    a, b = decode(src), decode(out)
+    assert abs(len(a) - len(b)) <= 1024, (len(a), len(b))
+    assert abs(onset(a) - onset(b)) <= 48, (onset(a), onset(b))  # <= 1 ms
 
 
 def test_av_offset_preserved(srcdir, tmp_path):

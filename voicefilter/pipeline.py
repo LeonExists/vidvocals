@@ -429,7 +429,14 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
     policy = P.get("overlap_policy") or config.setting("overlap_policy")
     replacements: list[dict] = []
     ov_results: dict[int, dict] = {}
-    if P.get("overlap") == "separate" and any(s["overlap"] for s in segs):
+    if P.get("overlap") == "separate":
+        # Best: besides the flagged regions, every speech-like segment is checked with the
+        # 2-speaker separator (separated-source energies + gender of each source)
+        smin = float(P.get("overlap_scan_min_dur", 0.8))
+        for i, s in enumerate(segs):
+            s["scan"] = (not s["overlap"]) and seg_kind[i] in ("speech", "mixed") and \
+                s["end"] - s["start"] >= smin
+    if P.get("overlap") == "separate" and any(s["overlap"] or s.get("scan") for s in segs):
         try:
             ov_results = _separate_overlaps(work, segs, x16, P, head, emb_name, dev, pr, notes)
             models_used["overlap_separation"] = P.get("overlap_model")
@@ -440,6 +447,8 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
     for i, s in enumerate(segs):
         spk = spk_final.get(seg_spk[i])
         dur = s["end"] - s["start"]
+        if ov_results.get(i, {}).get("replacement"):
+            s["overlap"] = True  # confirmed by the separator
         l_fin = gender.combine_with_speaker(seg_l[i], seg_c[i], dur, spk) if not s["overlap"] else seg_l[i]
         p = float(gender.sigmoid(l_fin))
         conf = abs(2 * p - 1)
@@ -452,8 +461,10 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
                 keep = True
                 p = r["p_female"]
                 conf = r["confidence"]
-                replacements.append({"start": r["start"], "end": r["end"], "wav": r["replacement"],
-                                     "segment": i + 1})
+                for piece in r["pieces"]:
+                    if piece.get("wav"):
+                        replacements.append({"start": piece["start"], "end": piece["end"], "wav": piece["wav"],
+                                             "segment": i + 1})
             elif r and r.get("decision") in ("keep", "remove"):
                 keep = r["decision"] == "keep"
                 p, conf = r["p_female"], r["confidence"]
@@ -527,18 +538,21 @@ def _separate_overlaps(work: Path, segs: list[dict], x16: np.ndarray, P: dict,
     sep.load()
     results: dict[int, dict] = {}
     pad = 0.25
-    todo = [i for i, s in enumerate(segs) if s["overlap"]]
-    srcs = {}
+    todo = [i for i, s in enumerate(segs) if s["overlap"] or s.get("scan")]
+    piece_len = float(P.get("overlap_piece_s", 15.0))
+    srcs: dict[int, list] = {}
     for n_done, i in enumerate(todo):
         s = segs[i]
-        a, b = max(0.0, s["start"] - pad), s["end"] + pad
-        x = features.cut(x16, a, b)
-        if len(x) < 1600:
-            continue
-        y = sep.separate(x)
-        g = overlap.ls_gains(x, y)
-        y = y * g[:, None]
-        srcs[i] = (a, b, y)
+        n_p = max(1, int(np.ceil((s["end"] - s["start"]) / piece_len)))
+        edges = np.linspace(s["start"], s["end"], n_p + 1)
+        for a0, b0 in zip(edges[:-1], edges[1:]):
+            a, b = max(0.0, a0 - pad), b0 + pad
+            x = features.cut(x16, a, b)
+            if len(x) < 1600:
+                continue
+            y = sep.separate(x)
+            g = overlap.ls_gains(x, y)
+            srcs.setdefault(i, []).append((a, b, y * g[:, None]))
         pr.update(0.5 * (n_done + 1) / max(1, len(todo)), "separating overlapping voices")
     sep.unload()
     if not srcs:
@@ -549,36 +563,52 @@ def _separate_overlaps(work: Path, segs: list[dict], x16: np.ndarray, P: dict,
         emb.load(dev)
     rdir = work / "replacements"
     rdir.mkdir(exist_ok=True)
+    k16 = int(pad * features.SR16)
     with sf.SoundFile(str(work / "vocals.wav")) as fv:
-        for n_done, (i, (a, b, y)) in enumerate(srcs.items()):
-            core = [yy[int(pad * features.SR16):len(yy) - int(pad * features.SR16)] for yy in y]
-            if head.available:
-                E2 = emb.embed_batch(core) if emb is not None else None
-                ps = head.predict_many(core, E2)
+        for n_done, (i, pieces) in enumerate(srcs.items()):
+            flagged = segs[i]["overlap"]
+            pf_min, pm_max, db_min = (0.5, 0.5, -20.0) if flagged else (0.65, 0.35, -12.0)
+            out_pieces, confirmed = [], False
+            for k, (a, b, y) in enumerate(pieces):
+                core = [yy[k16:len(yy) - k16] if len(yy) > 2 * k16 + 160 else yy for yy in y]
+                if head.available:
+                    E2 = emb.embed_batch(core) if emb is not None else None
+                    ps = head.predict_many(core, E2)
+                else:
+                    ps = np.array([features.pitch_p_female(features.pitch_stats(*features.yin_track(c), 0.01, 0, 1e9))[0]
+                                   for c in core])
+                rms = np.array([np.sqrt(np.mean(c ** 2) + 1e-12) for c in core])
+                rel_db = 20 * np.log10(rms / rms.max())
+                fi, mi = int(np.argmax(ps)), int(np.argmin(ps))
+                pc = {"start": round(a, 3), "end": round(b, 3), "p_sources": [round(float(q), 3) for q in ps],
+                      "rel_db": [round(float(r), 1) for r in rel_db]}
+                if fi != mi and ps[fi] >= pf_min and ps[mi] < pm_max and rel_db.min() > db_min:
+                    # one female, one male: full-band female-only replacement for this piece
+                    fv.seek(int(a * media.SR))
+                    v44 = fv.read(int((b - a) * media.SR), dtype="float32", always_2d=True)
+                    rep = overlap.female_mask_replacement(v44, y[fi], y[mi], media.SR)
+                    rp = rdir / f"seg{i + 1}_{k}.wav"
+                    sf.write(str(rp), rep, media.SR, subtype="FLOAT")
+                    pc.update(wav=rp.name, p_female=float(ps[fi]),
+                              confidence=float(min(abs(2 * ps[fi] - 1), abs(2 * ps[mi] - 1))))
+                    confirmed = True
+                else:
+                    dom = int(np.argmax(rms))
+                    q = float(ps[dom]) if rel_db.min() < -10 else float(np.max(ps))
+                    pc.update(p_female=q, confidence=float(abs(2 * q - 1)))
+                out_pieces.append(pc)
+            if confirmed:
+                good = [pc for pc in out_pieces if pc.get("wav")]
+                results[i] = {"replacement": True, "pieces": out_pieces,
+                              "p_female": float(np.mean([pc["p_female"] for pc in good])),
+                              "confidence": float(np.min([pc["confidence"] for pc in good]))}
+            elif flagged:
+                # not a male/female overlap after all: decide on the dominant sources
+                q = float(np.mean([pc["p_female"] for pc in out_pieces]))
+                results[i] = {"decision": "keep" if q >= 0.5 else "remove", "p_female": q,
+                              "confidence": float(abs(2 * q - 1)), "pieces": out_pieces}
             else:
-                ps = np.array([features.pitch_p_female(features.pitch_stats(*features.yin_track(c), 0.01, 0, 1e9))[0]
-                               for c in core])
-            rms = np.array([np.sqrt(np.mean(c ** 2) + 1e-12) for c in core])
-            rel_db = 20 * np.log10(rms / rms.max())
-            fi, mi = int(np.argmax(ps)), int(np.argmin(ps))
-            res = {"start": a, "end": b, "p_sources": [round(float(p), 3) for p in ps],
-                   "rel_db": [round(float(r), 1) for r in rel_db]}
-            if fi != mi and ps[fi] >= 0.5 > ps[mi] and rel_db.min() > -20:
-                # one female, one male: build the full-band female-only replacement
-                fv.seek(int(a * media.SR))
-                v44 = fv.read(int((b - a) * media.SR), dtype="float32", always_2d=True)
-                rep = overlap.female_mask_replacement(v44, y[fi], y[mi], media.SR)
-                p = rdir / f"seg{i + 1}.wav"
-                sf.write(str(p), rep, media.SR, subtype="FLOAT")
-                res.update({"replacement": str(p.name), "p_female": float(ps[fi]),
-                            "confidence": float(min(abs(2 * ps[fi] - 1), abs(2 * ps[mi] - 1)))})
-            else:
-                # not a male/female overlap after all: decide on the dominant source
-                dom = int(np.argmax(rms))
-                p = float(ps[dom]) if rel_db.min() < -10 else float(np.max(ps))
-                res.update({"decision": "keep" if p >= 0.5 else "remove", "p_female": p,
-                            "confidence": float(abs(2 * p - 1))})
-            results[i] = res
+                results[i] = {"scan_only": True, "pieces": out_pieces}
             pr.update(0.5 + 0.5 * (n_done + 1) / len(srcs), "classifying separated voices")
     if emb is not None:
         emb.unload()

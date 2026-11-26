@@ -46,7 +46,13 @@
       "license": "not stated (free community weights, personal use)",
       "params_m": 51.0,
       "gflop_per_audio_s_per_pass": 599.2,
-      "verified_here": true
+      "verified_here": true,
+      "measured_here": {
+        "sdr_vocals_db_testmix_30s_ov2": 11.77,
+        "sdr_vocals_db_8s_ov1_hop441": 11.28,
+        "sdr_vocals_db_8s_ov1_hop512_upstream_yaml": 7.79
+      },
+      "vram_gb_estimate": "2-4 (fp16, batch 1-2), estimate"
     },
     "sep_kim_melband": {
       "type": "mel_band_roformer",
@@ -93,7 +99,12 @@
       "license": "MIT",
       "params_m": 228.2,
       "gflop_per_audio_s_per_pass": 388.4,
-      "verified_here": true
+      "verified_here": true,
+      "measured_here": {
+        "sdr_vocals_db_testmix_12s_ov2": 6.35,
+        "sdr_0_8s": 7.84
+      },
+      "vram_gb_estimate": "2-4 (fp16, batch 1-2), estimate"
     },
     "sep_viperx_bs_317": {
       "type": "bs_roformer",
@@ -138,9 +149,13 @@
         "fp16": true
       },
       "license": "not stated (UVR public release)",
-      "params_m": null,
-      "gflop_per_audio_s_per_pass": null,
-      "verified_here": true
+      "params_m": 159.8,
+      "gflop_per_audio_s_per_pass": 1087.0,
+      "verified_here": true,
+      "measured_here": {
+        "sdr_vocals_db_8s_ov1": 7.68
+      },
+      "vram_gb_estimate": "2-4 (fp16, batch 1-2), estimate"
     },
     "sep_htdemucs_ft_vocals": {
       "type": "demucs",
@@ -172,7 +187,11 @@
       "params_m": 42.0,
       "gflop_per_audio_s_per_pass": 32.6,
       "verified_here": true,
-      "role": "ultra-fast fallback only"
+      "role": "ultra-fast fallback only",
+      "measured_here": {
+        "sdr_vocals_db_testmix_30s": 4.08,
+        "sdr_12s": 7.36
+      }
     },
     "sep_leap_xe_optional": {
       "type": "bs_roformer",
@@ -429,9 +448,9 @@
         "model": "sep_resurrection_bs",
         "repo_id": "pcunwa/BS-Roformer-Resurrection",
         "filename": "bs_roformer_vocals_resurrection_unwa.ckpt",
-        "config": "config_bs_roformer_vocals_resurrection_unwa.yaml",
+        "config": "config_bs_roformer_vocals_resurrection_unwa.yaml (GitHub mirror, hop 441)",
         "type": "bs_roformer",
-        "num_overlap": 2,
+        "num_overlap": 1,
         "fallback": "sep_htdemucs_ft_vocals"
       },
       "vad": {
@@ -455,13 +474,13 @@
     },
     "balanced": {
       "separation": {
-        "model": "sep_kim_melband",
-        "repo_id": "KimberleyJSN/melbandroformer",
-        "filename": "vocals_mel_band_roformer.ckpt",
-        "config": "vocals_mel_band_roformer.yaml",
-        "type": "mel_band_roformer",
+        "model": "sep_resurrection_bs",
+        "repo_id": "pcunwa/BS-Roformer-Resurrection",
+        "filename": "bs_roformer_vocals_resurrection_unwa.ckpt",
+        "config": "config_bs_roformer_vocals_resurrection_unwa.yaml (GitHub mirror, hop 441)",
+        "type": "bs_roformer",
         "num_overlap": 2,
-        "fallback": "sep_resurrection_bs"
+        "fallback": "sep_htdemucs_ft_vocals"
       },
       "vad": {
         "primary": "vad_energy_stem",
@@ -488,14 +507,19 @@
     },
     "best": {
       "separation": {
-        "model": [
+        "model": "sep_resurrection_bs",
+        "repo_id": "pcunwa/BS-Roformer-Resurrection",
+        "filename": "bs_roformer_vocals_resurrection_unwa.ckpt",
+        "config": "config_bs_roformer_vocals_resurrection_unwa.yaml (GitHub mirror, hop 441)",
+        "type": "bs_roformer",
+        "num_overlap": 4,
+        "fallback": "sep_htdemucs_ft_vocals",
+        "optional_ensemble_members": [
           "sep_kim_melband",
-          "sep_viperx_bs_317"
+          "sep_viperx_bs_317",
+          "sep_leap_xe_optional"
         ],
-        "ensemble": "mean_waveform",
-        "type": "ensemble",
-        "num_overlap": 2,
-        "optional_member": "sep_leap_xe_optional"
+        "ensemble_note": "off by default: averaging Kim with Resurrection lowered SDR on our test mix (8.67 vs 10.60 dB); re-evaluate on realistic mixes"
       },
       "vad": {
         "primary": "vad_energy_stem",
@@ -528,5 +552,11 @@
         "sep_leap_xe_optional"
       ]
     }
+  },
+  "estimates_rtx3080_10min_video": {
+    "fast_min": "1-1.5",
+    "balanced_min": "1.5-2",
+    "best_min": "2.5-3.5",
+    "basis": "measured FLOPs x overlap / 12-18 TFLOP/s effective; not measured on GPU"
   }
 }

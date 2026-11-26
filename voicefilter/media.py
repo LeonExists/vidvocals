@@ -227,6 +227,73 @@ def _audio_codec_for(ext: str, src_info: dict) -> list[str]:
     return ["-c:a", "aac", "-b:a", "256k" if ch == 2 else "160k", "-ar", str(min(sr, 96000)), "-ac", str(ch)]
 
 
+_DELAY_CACHE: dict[tuple, tuple[float, int]] = {}
+
+
+def _decode_timeline(path: Path, sr: int) -> np.ndarray:
+    """Decode the first audio stream on the file timeline (leading gap filled with silence)."""
+    p = _run([config.FFMPEG, "-v", "error", "-nostdin", "-i", str(path), "-map", "0:a:0", "-af",
+              "aresample=async=1:first_pts=0", "-ac", "1", "-ar", str(sr), "-f", "f32le", "-"])
+    return np.frombuffer(p.stdout, np.float32)
+
+
+def codec_delay(ext: str, codec_args: list[str]) -> tuple[float, int]:
+    """Measured (delay_seconds, extra_samples_at_44.1k) of an audio encoder + container.
+
+    Some combinations do not signal the encoder delay (priming) - e.g. AAC/MP3/MP2 in
+    Matroska, AVI or MPEG-TS - so the decoded audio comes out shifted by ~20 ms.  We
+    measure it once per (container, codec) with a click track and compensate in
+    :func:`export_video`.  mp4/mov (edit lists) and Opus in WebM measure ~0.
+    """
+    key = (ext, tuple(codec_args))
+    if key in _DELAY_CACHE:
+        return _DELAY_CACHE[key]
+    codec = codec_args[codec_args.index("-c:a") + 1] if "-c:a" in codec_args else ""
+    if codec not in ("aac", "libmp3lame", "mp2", "ac3") or ext in (".mp4", ".m4v", ".mov", ".m4a", ".3gp"):
+        # mp4-family edit lists signal AAC priming; Opus pre-skip is signalled everywhere
+        # (its negative start time is handled by players); PCM/FLAC have no delay
+        _DELAY_CACHE[key] = (0.0, 0)
+        return _DELAY_CACHE[key]
+    import tempfile
+
+    import soundfile as sf
+
+    res = (0.0, 0)
+    try:
+        with tempfile.TemporaryDirectory(prefix="vf-delay-") as d:
+            n = SR * 2
+            x = np.zeros((n, 2), np.float32)
+            t = np.arange(int(0.01 * SR)) / SR
+            click = 0.8 * np.sin(2 * np.pi * 1000 * t) * np.hanning(len(t))
+            for at in (0.5, 1.2):
+                i = int(at * SR)
+                x[i:i + len(click)] += click[:, None]
+            wav = Path(d) / "c.wav"
+            sf.write(str(wav), x, SR, subtype="FLOAT")
+            out = Path(d) / ("c" + ext)
+            _run([config.FFMPEG, "-v", "error", "-y", "-nostdin", "-i", str(wav), "-map", "0:a:0"]
+                 + codec_args + [str(out)])
+            y = _decode_timeline(out, SR)
+            ref = x[:, 0]
+            # cross-correlate around the clicks (max lag +-100 ms)
+            L = int(0.1 * SR)
+            seg = slice(int(0.3 * SR), int(1.5 * SR))
+            yy = np.zeros(n + 2 * L, np.float32)
+            m = min(len(y), n + L)
+            yy[L:L + m] = y[:m]
+            r = ref[seg]
+            best, lag = -1.0, 0
+            for k in range(-L, L + 1):
+                c = float(np.dot(r, yy[L + seg.start + k:L + seg.stop + k]))
+                if c > best:
+                    best, lag = c, k
+            res = (lag / SR, int(len(y) - n))
+    except Exception:
+        res = (0.0, 0)
+    _DELAY_CACHE[key] = res
+    return res
+
+
 def output_extension(src: str | Path) -> str:
     ext = Path(src).suffix.lower()
     if ext in (".aac",):
@@ -257,6 +324,19 @@ def export_video(src_video: str | Path, filtered_wav: str | Path, out_path: str 
     ext = out_path.suffix.lower()
     offset = audio_offset(info)
     tmp_out = out_path.with_name(out_path.stem + ".part" + out_path.suffix)
+    acodec = _audio_codec_for(ext, info)
+    delay, _ = codec_delay(ext, acodec)
+    afilter = None
+    if abs(delay) > 0.0005:
+        if delay > 0:
+            # encoder delay not signalled by the container: start the audio earlier
+            if offset >= delay:
+                offset -= delay
+            else:
+                afilter = f"atrim=start={delay - offset:.6f},asetpts=PTS-STARTPTS"
+                offset = 0.0
+        else:
+            offset += -delay
     cmd = [config.FFMPEG, "-v", "error", "-y", "-i", str(src_video)]
     if offset > 0.0005:
         cmd += ["-itsoffset", f"{offset:.6f}"]
@@ -274,7 +354,9 @@ def export_video(src_video: str | Path, filtered_wav: str | Path, out_path: str 
     if ext in (".mkv", ".mka"):
         cmd += ["-map", "0:t?"]  # attachments (fonts)
     cmd += ["-c:v", "copy"]
-    cmd += _audio_codec_for(ext, info)
+    cmd += acodec
+    if afilter:
+        cmd += ["-af", afilter]
     cmd += ["-map_metadata", "0", "-map_chapters", "0"]
     a = info.get("audio") or {}
     if a.get("index") is not None:
