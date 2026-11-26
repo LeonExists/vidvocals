@@ -42,12 +42,18 @@ non-commercial tool, but do not ship them commercially. A commercially clean hea
 0.5 for EARS, 0.4 otherwise). No speaker is in both splits; the trained heads use only `train` speakers; the
 synthetic mixes and every number in `GENDER_MODELS.md` / `REPORT.md` use only `test` speakers.
 
-Non-verbal clips per split (phonated = vocal-fold sounds; non-phonated = mouth/teeth/nose noises):
+Clips in the manifest per split (feature extraction then caps speech at 2-3 clips per speaker, see `eval/extract_features.py`; non-phonated = mouth/teeth/nose noises):
 
-| split | phonated F | phonated M | non-phonated F | non-phonated M |
-|---|---|---|---|---|
-| train | 158 | 73 | 98 | 46 |
-| test | 165 | 45 | 106 | 30 |
+| source | kind | train F | train M | test F | test M | speakers train F/M, test F/M |
+|---|---|---|---|---|---|---|
+| audiomnist | speech | 36 | 173 | 36 | 114 | 6/29, 6/19 |
+| crema | speech | 168 | 240 | 176 | 144 | 21/30, 22/18 |
+| crowd | speech | 232 | 256 | 152 | 168 | 58/64, 38/42 |
+| deeply | nonphonated | 98 | 46 | 106 | 30 | 131/74, 154/49 |
+| deeply | nonverbal | 158 | 73 | 165 | 45 | 131/74, 154/49 |
+| ears | nonverbal | 216 | 192 | 264 | 152 | 27/24, 33/19 |
+| ears | speech | 54 | 48 | 66 | 38 | 27/24, 33/19 |
+| librispeech | speech | 405 | 390 | 195 | 210 | 27/26, 13/14 |
 
 Phonated categories: moaning (45 clips total), screaming (51), panting (44), sighing (51), crying (24),
 laughing (25), yawning (48), coughing (50), throat clearing (54), sneezing (52). Non-phonated:
@@ -69,3 +75,25 @@ teeth-chattering, teeth-grinding, tongue-clicking, lip-popping, lip-smacking, no
 - Whispered speech: only the EARS whispered sentence; breathy sounds: sighing / panting / yawning.
 - Reverb is synthetic (exponential decay noise, RT60 0.3-0.9 s); real room responses (SLR 28) were not
   downloaded to save space.
+
+## Synthetic evaluation mixes (`eval/build_dataset.py`, seed 2024)
+
+44.1 kHz stereo, test speakers only; per mix `mix.wav`, `mix.mp4` (testsrc2 + AAC), `vocals_female.wav`, `vocals_male.wav`, `background.wav` (float32, mix = exact sum) and `truth.json`. Overlap = share of vocal time with male and female active at once.
+
+| mix | s | speakers | events (non-verbal / short) | overlap | background | SNR dB | reverb | hard cases |
+|---|---|---|---|---|---|---|---|---|
+| smoke | 10 | mixed (F M) | 4 (2 / 1) | 7 % | esc_noise | -4.34 | False | - |
+| mix_00 | 64 | mixed (F M M M) | 18 (8 / 2) | 7 % | music | 10.73 | False | - |
+| mix_01 | 114 | mixed (F M M) | 37 (15 / 2) | 17 % | esc_noise | 0.8 | True | - |
+| mix_02 | 95 | mixed (F M) | 24 (6 / 3) | 10 % | synthetic_noise | 1.42 | False | low_pitched_female:gc:en-GB-welsh:06136:96Hz |
+| mix_03 | 99 | mixed (F F M) | 27 (13 / 3) | 13 % | music | 7.96 | False | high_pitched_male:cr:1005:259Hz |
+| mix_04 | 64 | F (F F F F) | 12 (5 / 0) | 0 % | esc_noise | 8.36 | True | - |
+| mix_05 | 97 | M (M M) | 26 (9 / 2) | 0 % | synthetic_noise | -1.32 | False | - |
+| mix_06 | 89 | mixed (F M) | 27 (11 / 2) | 21 % | music | 4.37 | False | low_pitched_female:gc:en-GB-welsh:06136:96Hz |
+| mix_07 | 72 | mixed (F M) | 19 (11 / 2) | 10 % | esc_noise | 9.63 | True | high_pitched_male:cr:1005:259Hz |
+| mix_08 | 69 | mixed (F M) | 26 (9 / 3) | 16 % | synthetic_noise | 8.93 | False | - |
+| mix_09 | 67 | mixed (F M M) | 27 (15 / 1) | 18 % | music | -2.93 | False | - |
+| mix_10 | 111 | F (F F) | 26 (17 / 3) | 0 % | esc_noise | 9.3 | True | low_pitched_female:gc:en-GB-welsh:06136:96Hz |
+| mix_11 | 79 | M (M M) | 23 (16 / 2) | 0 % | music_vocals | 2.85 | False | high_pitched_male:cr:1005:259Hz, background_with_sung_vocals |
+
+Note: the "low-pitched female" (gc:en-GB-welsh:06136, median F0 96 Hz by pyin) may be creaky voice or a pitch-tracking artefact; the "high-pitched male" is CREMA-D actor 1005 (259 Hz, acted emotional speech).

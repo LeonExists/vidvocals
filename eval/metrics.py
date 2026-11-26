@@ -219,6 +219,25 @@ def gain_envelope(keep: np.ndarray, n_samples: int, sr: int, hop: float = HOP, f
     return np.clip(np.convolve(g, k, mode="same"), 0.0, 1.0)
 
 
+def audio_aggregate(per_mix: list[dict]) -> dict:
+    """Mean audio metrics over mixes. SI-SDR improvement is averaged only over mixes that contain male
+    voice (for female-only mixes the input already equals female+background, so 'improvement' is
+    meaningless and would dominate the mean)."""
+    audio = {}
+    for key in ("male_residual_db", "female_preserved_db", "si_sdr_vs_female_plus_bg", "si_sdr_improvement",
+                "male_residual_db_overlap"):
+        vals = []
+        for r in per_mix:
+            a = r.get("audio") or {}
+            if a.get(key) is None:
+                continue
+            if key == "si_sdr_improvement" and a.get("male_residual_db") is None:
+                continue
+            vals.append(a[key])
+        audio[key + "_mean"] = float(np.mean(vals)) if vals else None
+    return audio
+
+
 def aggregate(per_mix: list[dict]) -> dict:
     """Micro-average frame metrics (frame-count weighted) and event accuracies across mixes."""
     def w_avg(key, wkey):
@@ -277,11 +296,7 @@ def aggregate(per_mix: list[dict]) -> dict:
                 c["time_s"] += e["duration"]
                 c["wrong_s"] += e.get("wrong_s", 0.0)
     errors = {f"{g}|{k}": v for (g, k), v in sorted(err.items())}
-    audio = {}
-    for key in ("male_residual_db", "female_preserved_db", "si_sdr_vs_female_plus_bg", "si_sdr_improvement",
-                "male_residual_db_overlap"):
-        vals = [r["audio"][key] for r in per_mix if r.get("audio") and r["audio"].get(key) is not None]
-        audio[key + "_mean"] = float(np.mean(vals)) if vals else None
+    audio = audio_aggregate(per_mix)
     dur = sum(r["duration"] for r in per_mix)
     t = sum(r.get("processing_s", 0.0) for r in per_mix)
     return {"n_mixes": len(per_mix), "total_duration_s": dur, "frames": fr, "events": events, "errors": errors,
