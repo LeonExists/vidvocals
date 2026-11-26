@@ -244,21 +244,17 @@ Assert-Equal 0 $code 'S5 second uninstall exit code'
 $out5 = [System.IO.File]::ReadAllText((Join-Path $root 's5-uninstall.out.txt'))
 Assert-True ($out5.Contains('Nothing needed to be removed')) 'S5 reports nothing to remove'
 
-# ---- S6: install fails at PyTorch (driver says CUDA 12.8, index never delivers) ----
+# ---- S6: model download fails (soft step) -> exit code 2, rest installed ---------
 $env:PATH = (Join-Path $fx 'bin') + ':' + $basePath
-$env:VF_MOCK_CUDA = '12.8'
-[System.IO.File]::WriteAllText($uvLog, '')
+$env:VF_MOCK_DOWNLOAD_EXIT = '1'
 $code = Invoke-Mocked 'install' '{"Yes": true, "Presets": "fast"}' '' 's6-install'
-Assert-Equal 1 $code 'S6 failing install exit code 1'
-$uvCalls = [System.IO.File]::ReadAllText($uvLog)
-foreach ($tag in @('cu128', 'cu126', 'cu124')) {
-    Assert-True ($uvCalls.Contains("--index https://download.pytorch.org/whl/$tag")) "S6 tried the $tag index"
-}
-Assert-True ($uvCalls.Contains('--reinstall-package torch')) 'S6 reinstalls torch when switching builds'
-Assert-True (Test-Path -LiteralPath (Join-Path $app 'install-manifest.json')) 'S6 manifest written despite the failure'
+$env:VF_MOCK_DOWNLOAD_EXIT = '0'
+Assert-Equal 2 $code 'S6 install with failing model download exits 2'
+Assert-True (Test-Path -LiteralPath (Join-Path $app 'start.bat')) 'S6 start.bat still written'
+$man = Read-Json (Join-Path $app 'install-manifest.json')
+Assert-Equal $false $man.models_downloaded 'S6 manifest models_downloaded false'
 $out6 = [System.IO.File]::ReadAllText((Join-Path $root 's6-install.out.txt'))
-Assert-True ($out6.Contains('PyTorch could not be installed')) 'S6 explains the failing step'
-Assert-True ($out6.Contains('run install.bat again')) 'S6 hints to re-run'
+Assert-True ($out6.Contains('Models:     incomplete')) 'S6 summary says models are incomplete'
 
 # ---- S7: interactive uninstall, strays removed with consent ------------------------
 $code = Invoke-Mocked 'uninstall' '{}' '|y|n' 's7-uninstall'
@@ -267,5 +263,27 @@ Assert-True (-not (Test-Path -LiteralPath $strayHub)) 'S7 stray HF cache removed
 Assert-True (-not (Test-Path -LiteralPath $strayTmp)) 'S7 stray temp file removed with consent'
 $now = @(Get-ChildItem -LiteralPath $app -Recurse -Force | ForEach-Object { $_.FullName.Substring($app.Length) } | Sort-Object)
 Assert-Equal @() @($now | Where-Object { $originalListing -notcontains $_ }) 'S7 app folder clean again'
+
+# ---- S8: install fails at PyTorch (driver says CUDA 12.8, index never delivers) ----
+$env:VF_MOCK_CUDA = '12.8'
+[System.IO.File]::WriteAllText($uvLog, '')
+$code = Invoke-Mocked 'install' '{"Yes": true}' '' 's8-install'
+Assert-Equal 1 $code 'S8 failing install exit code 1'
+$uvCalls = [System.IO.File]::ReadAllText($uvLog)
+foreach ($tag in @('cu128', 'cu126', 'cu124')) {
+    Assert-True ($uvCalls.Contains("--index https://download.pytorch.org/whl/$tag")) "S8 tried the $tag index"
+}
+Assert-True ($uvCalls -notmatch 'whl/cu13|whl/cpu') 'S8 did not try indexes the driver cannot run / CPU'
+Assert-True ($uvCalls.Contains('--reinstall-package torch')) 'S8 reinstalls torch when switching builds'
+Assert-True (Test-Path -LiteralPath (Join-Path $app 'install-manifest.json')) 'S8 manifest written despite the failure'
+$out8 = [System.IO.File]::ReadAllText((Join-Path $root 's8-install.out.txt'))
+Assert-True ($out8.Contains('PyTorch could not be installed')) 'S8 explains the failing step'
+Assert-True ($out8.Contains('run install.bat again')) 'S8 hints to re-run'
+
+# ---- S9: non-interactive uninstall after the failed install -------------------------
+$code = Invoke-Mocked 'uninstall' '{"Yes": true}' '' 's9-uninstall'
+Assert-Equal 0 $code 'S9 uninstall exit code'
+$now = @(Get-ChildItem -LiteralPath $app -Recurse -Force | ForEach-Object { $_.FullName.Substring($app.Length) } | Sort-Object)
+Assert-Equal @() @($now | Where-Object { $originalListing -notcontains $_ }) 'S9 app folder clean again'
 
 $env:PATH = $basePath

@@ -93,6 +93,7 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "max_upload_bytes": 0,         # 0 = unlimited
     "preview_debounce_s": 1.0,
     "cpu_threads": 0,              # 0 = torch default
+    "feature_workers": 0,          # processes for pitch/spectral features, 0 = auto
     "keep_job_files": True,
 }
 SETTINGS: dict[str, Any] = dict(DEFAULT_SETTINGS)

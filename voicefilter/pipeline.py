@@ -571,9 +571,8 @@ def _separate_overlaps(work: Path, segs: list[dict], x16: np.ndarray, P: dict,
 # ---------------------------------------------------------------------------
 # rendering
 # ---------------------------------------------------------------------------
-def _replacements(work: Path, analysis: dict) -> list[dict]:
+def _replacements(work: Path, keep_ids: set[str]) -> list[dict]:
     reps = _read_json(work / "replacements.json", []) or []
-    keep_ids = {s["id"] for s in analysis.get("segments", [])}
     out = []
     for r in reps:
         if r.get("segment") not in keep_ids:
@@ -599,8 +598,7 @@ def render_from_analysis(work_dir: str | Path, analysis: Optional[dict] = None,
     kept = {s["id"] for s in analysis["segments"]
             if render.effective_keep(s, {str(x["id"]): x.get("override") for x in analysis.get("speakers", [])},
                                      analysis.get("low_conf_default") or config.setting("low_conf_default"))}
-    reps = [r for r, src in zip(_replacements(work, analysis), _read_json(work / "replacements.json", []) or [])
-            if src.get("segment") in kept]
+    reps = _replacements(work, kept)
     return render.render(work / "vocals.wav", work / "background.wav", work / out_name, intervals,
                          keep_background=keep_background, replacements=reps, progress=progress)
 
