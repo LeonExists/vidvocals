@@ -1,0 +1,10 @@
+.venv/
+runtime/
+models/
+data/
+__pycache__/
+*.pyc
+install-manifest.json
+eval/data/
+eval/cache/
+.pytest_cache/
