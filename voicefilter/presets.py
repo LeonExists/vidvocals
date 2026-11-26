@@ -52,6 +52,12 @@ MODELS: dict[str, dict[str, Any]] = {
         "kind": "embedding", "type": "ecapa_tao", "size_mb": 66,
         "license": "MIT (TaoRuijie/ECAPA-TDNN, VoxCeleb2)",
     },
+    # ---------------------------------------------------------------- optional extras (HF only)
+    "ast_audioset": {
+        "kind": "tagger", "type": "hf_audio_tagger", "repo": "MIT/ast-finetuned-audioset-10-10-0.4593",
+        "allow_patterns": ["*.json", "*.safetensors"], "size_mb": 350,
+        "license": "BSD-3-Clause (Audio Spectrogram Transformer, AudioSet)",
+    },
     # ---------------------------------------------------------------- overlap separation
     "convtasnet_libri2mix": {
         "kind": "speech_separation", "type": "torchaudio", "bundle": "CONVTASNET_BASE_LIBRI2MIX",
@@ -92,6 +98,7 @@ PRESETS: dict[str, dict[str, Any]] = {
         "gender_models": ["head", "hf", "tagger", "pitch"],
         "overlap": "separate",
         "overlap_model": "convtasnet_libri2mix",
+        "tagger": "ast_audioset",
         "cluster_threshold": 0.65,
     },
 }
@@ -186,15 +193,3 @@ def preset_list() -> list[dict]:
     order = [p for p in PRESET_ORDER if p in ps] + [p for p in ps if p not in PRESET_ORDER]
     return [{"id": p, "name": ps[p].get("name", p.title()), "description": ps[p].get("description", "")}
             for p in order if not ps[p].get("hidden")]
-
-
-def required_models(pid: str) -> list[str]:
-    """Model ids a preset needs to be fully functional (optional extras excluded)."""
-    p = get_preset(pid)
-    req = [p["separation"], p.get("embedding", "ecapa_tao")]
-    if p.get("overlap") == "separate" and p.get("overlap_model"):
-        req.append(p["overlap_model"])
-    for g in ("hf_gender", "tagger"):
-        if p.get(g) and g.split("_")[0] in [x.split("_")[0] for x in p.get("gender_models", [])]:
-            req.append(p[g])
-    return req

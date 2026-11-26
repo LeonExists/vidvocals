@@ -270,17 +270,19 @@ class JobStore:
                 elif what == "export":
                     self._export(job)
             except InterruptedError:
-                continue
+                pass
             except Exception as exc:  # noqa: BLE001
-                if job.get("deleted"):
-                    continue
-                tb = traceback.format_exc()
-                try:
-                    (self._dir(jid) / "error.log").write_text(tb, encoding="utf-8")
-                except OSError:
-                    pass
-                msg = str(exc) or type(exc).__name__
-                self.update(jid, state="error", stage="error", error=msg, message="Failed")
+                if not job.get("deleted"):
+                    tb = traceback.format_exc()
+                    try:
+                        (self._dir(jid) / "error.log").write_text(tb, encoding="utf-8")
+                    except OSError:
+                        pass
+                    msg = str(exc) or type(exc).__name__
+                    self.update(jid, state="error", stage="error", error=msg, message="Failed")
+            finally:
+                if job.get("deleted"):  # deleted while running: files may have been in use
+                    shutil.rmtree(self._dir(jid), ignore_errors=True)
 
     def _analyze(self, job: dict) -> None:
         jid = job["id"]

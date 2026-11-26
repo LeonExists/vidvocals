@@ -8,3 +8,6 @@ install-manifest.json
 eval/data/
 eval/cache/
 .pytest_cache/
+start.bat
+start.ps1
+config.json
