@@ -374,7 +374,5 @@ def build_and_load(model_type: str, cfg: dict, ckpt_path: str) -> nn.Module:
         raise RuntimeError(f"checkpoint {ckpt_path} does not match the {model_type} config: "
                            f"missing={missing[:6]} (n={len(missing)}), "
                            f"unexpected={list(res.unexpected_keys)[:6]} (n={len(res.unexpected_keys)})")
-    for k, v in model.named_buffers():
-        pass
     model.eval()
     return model
