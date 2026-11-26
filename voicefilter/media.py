@@ -73,8 +73,15 @@ def probe(path: str | Path) -> dict[str, Any]:
     dict or None: index, codec, channels, sample_rate, start_time, duration, bit_rate),
     n_audio, subtitles, raw (ffprobe json).
     """
-    p = _run([config.FFPROBE, "-v", "error", "-print_format", "json", "-show_format",
-              "-show_streams", str(path)])
+    try:
+        p = _run([config.FFPROBE, "-v", "error", "-print_format", "json", "-show_format",
+                  "-show_streams", str(path)])
+    except MediaError as exc:
+        if isinstance(exc.__cause__, FileNotFoundError):  # ffprobe itself missing
+            raise
+        last = str(exc).strip().splitlines()[-1] if str(exc).strip() else ""
+        last = last.replace(str(path), Path(path).name)
+        raise MediaError(f"Could not read this file as video or audio ({last.strip()})") from exc
     try:
         data = json.loads(p.stdout.decode("utf-8", "replace") or "{}")
     except json.JSONDecodeError as exc:

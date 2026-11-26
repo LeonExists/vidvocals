@@ -2,13 +2,14 @@
 from __future__ import annotations
 
 import os
+import shutil
 import socket
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Optional
 from urllib.parse import quote
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -63,6 +64,73 @@ def _bool(v: Any, default: bool) -> bool:
     return str(v).strip().lower() in ("1", "true", "yes", "on")
 
 
+async def _stream_upload(request: Request, d: Path, limit: int):
+    from python_multipart.multipart import MultipartParser, parse_options_header
+
+    ctype, params = parse_options_header(request.headers.get("content-type", ""))
+    if ctype != b"multipart/form-data" or b"boundary" not in params:
+        raise HTTPException(400, "Expected multipart/form-data")
+    st: dict[str, Any] = {"hname": b"", "hval": b"", "headers": {}, "field": None, "filename": None,
+                          "buf": bytearray(), "fh": None, "dest": None, "name": None, "size": 0, "error": None}
+    fields: dict[str, str] = {}
+
+    def on_part_begin():
+        st.update(headers={}, field=None, filename=None, buf=bytearray())
+
+    def on_header_field(data, a, b):
+        st["hname"] += data[a:b]
+
+    def on_header_value(data, a, b):
+        st["hval"] += data[a:b]
+
+    def on_header_end():
+        st["headers"][st["hname"].decode("latin-1").lower()] = st["hval"]
+        st["hname"], st["hval"] = b"", b""
+
+    def on_headers_finished():
+        _, p = parse_options_header(st["headers"].get("content-disposition", b""))
+        st["field"] = p.get(b"name", b"").decode("utf-8", "replace")
+        fn = p.get(b"filename")
+        if fn is not None and st["field"] == "file":
+            st["filename"] = fn.decode("utf-8", "replace")
+            st["name"] = sanitize_filename(st["filename"] or "video.mp4")
+            ext = Path(st["name"]).suffix.lower() or ".bin"
+            st["dest"] = d / ("input" + ext)
+            st["fh"] = open(st["dest"], "wb")
+
+    def on_part_data(data, a, b):
+        if st["fh"] is not None:
+            st["size"] += b - a
+            if limit and st["size"] > limit:
+                st["error"] = HTTPException(413, f"File too large (limit {limit // 2**20} MB)")
+                return
+            st["fh"].write(data[a:b])
+        elif len(st["buf"]) < 65536:
+            st["buf"] += data[a:b]
+
+    def on_part_end():
+        if st["fh"] is not None:
+            st["fh"].close()
+            st["fh"] = None
+        elif st["field"]:
+            fields[st["field"]] = bytes(st["buf"]).decode("utf-8", "replace").strip()
+
+    parser = MultipartParser(params[b"boundary"], {
+        "on_part_begin": on_part_begin, "on_header_field": on_header_field, "on_header_value": on_header_value,
+        "on_header_end": on_header_end, "on_headers_finished": on_headers_finished,
+        "on_part_data": on_part_data, "on_part_end": on_part_end})
+    try:
+        async for chunk in request.stream():
+            parser.write(chunk)
+            if st["error"] is not None:
+                raise st["error"]
+        parser.finalize()
+    finally:
+        if st["fh"] is not None:
+            st["fh"].close()
+    return fields, st["name"], st["dest"], st["size"]
+
+
 def create_app(store: Optional[JobStore] = None, pipeline: Any = None, start_worker: bool = True) -> FastAPI:
     state: dict[str, Any] = {"store": store}
 
@@ -103,39 +171,30 @@ def create_app(store: Optional[JobStore] = None, pipeline: Any = None, start_wor
                 "lan_urls": lan_urls(config.PORT), "presets": presets.preset_list()}
 
     @app.post("/api/jobs")
-    async def create_job(request: Request, file: UploadFile = File(...), preset: str = Form("balanced"),
-                         keep_background: str = Form("true"), auto_export: str = Form("false")):
-        if preset not in presets.presets():
-            raise HTTPException(400, f"Unknown preset '{preset}'")
-        name = sanitize_filename(file.filename or "video.mp4")
+    async def create_job(request: Request):
+        """multipart/form-data: file, preset, keep_background, auto_export.
+
+        The body is parsed while it streams in and the file part goes straight to the job
+        folder (no temp copy, constant memory, works for multi-GB videos)."""
         limit = int(config.setting("max_upload_bytes") or 0)
         jid, d = S().new_job_dir()
-        ext = Path(name).suffix.lower() or ".bin"
-        dest = d / ("input" + ext)
-        size = 0
         try:
-            with open(dest, "wb") as f:
-                while True:
-                    chunk = await file.read(1 << 22)
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    if limit and size > limit:
-                        raise HTTPException(413, f"File too large (limit {limit // 2**20} MB)")
-                    f.write(chunk)
-        except BaseException:
-            import shutil
-
+            fields, name, dest, size = await _stream_upload(request, d, limit)
+        except HTTPException:
             shutil.rmtree(d, ignore_errors=True)
             raise
-        finally:
-            await file.close()
-        if size == 0:
-            import shutil
-
+        except Exception as exc:  # noqa: BLE001
             shutil.rmtree(d, ignore_errors=True)
-            raise HTTPException(400, "Empty upload")
-        S().create(jid, name, dest, preset, _bool(keep_background, True), _bool(auto_export, False))
+            raise HTTPException(400, f"Upload failed: {exc}")
+        preset = fields.get("preset") or "balanced"
+        if dest is None or size == 0:
+            shutil.rmtree(d, ignore_errors=True)
+            raise HTTPException(400, "No file uploaded" if dest is None else "Empty upload")
+        if preset not in presets.presets():
+            shutil.rmtree(d, ignore_errors=True)
+            raise HTTPException(400, f"Unknown preset '{preset}'")
+        S().create(jid, name, dest, preset, _bool(fields.get("keep_background"), True),
+                   _bool(fields.get("auto_export"), False))
         return {"id": jid}
 
     @app.get("/api/jobs")
