@@ -3,6 +3,8 @@
   python eval/run_eval.py --preset fast|balanced|best [--mixes mix_00 mix_01 | smoke] [--input mp4|wav]
   python eval/run_eval.py --oracle      # truth segments, keep = female   (upper bound for gating)
   python eval/run_eval.py --random      # truth segments, random keep     (sanity floor)
+  python eval/run_eval.py --oracle-separation --preset fast   # pipeline on TRUE stems (no separation)
+  python eval/run_eval.py --oracle-active                     # perfect frame-level gate
   python eval/run_eval.py --report-only # rebuild eval/REPORT.md from eval/results/*.json
 
 Pipeline contract (voicefilter/pipeline.py, PLAN.md section 5):
@@ -122,6 +124,54 @@ def score_mix(mix_dir: Path, analysis: dict, out_audio: np.ndarray | None, out_s
     return res
 
 
+def separation_stamp(src: Path, preset: str, n44: int) -> dict:
+    """The stamp voicefilter.pipeline.analyze_file writes after separation (same recipe)."""
+    from voicefilter import presets
+    P = presets.get_preset(preset)
+    spec = presets.model_spec(P["separation"])
+    spec.update(P.get("separation_params") or {})
+    if spec.get("type") == "ensemble":
+        for m in spec.get("members", []):
+            m.update(P.get("separation_params") or {})
+    st = src.stat()
+    return {"input": src.name, "size": st.st_size, "mtime": int(st.st_mtime), "frames": n44,
+            "model": P["separation"], "spec": json.dumps(spec, sort_keys=True, default=str)}
+
+
+def prepare_work_dir(md: Path, preset: str, wd: Path, src: Path, oracle_sep: bool) -> str:
+    """Make the pipeline skip separation when possible. Returns how separation will be obtained.
+
+    - oracle_sep: write the TRUE vocal stem (female+male) and background as the pipeline's cached
+      separation result (vocals.wav / background.wav / separation_stamp.json).
+    - otherwise: reuse the stems of another preset's work dir for the same mix if that run used the
+      identical separation model + parameters (the stamp matches).
+    """
+    import soundfile as sf
+    wd.mkdir(parents=True, exist_ok=True)
+    n44 = sf.info(str(md / "mix.wav")).frames if src.suffix == ".wav" else None
+    if oracle_sep:
+        F, sr = read_wav(md / "vocals_female.wav")
+        Mm, _ = read_wav(md / "vocals_male.wav")
+        B, _ = read_wav(md / "background.wav")
+        sf.write(str(wd / "vocals.wav"), (F + Mm).T.astype(np.float32), sr, subtype="FLOAT")
+        sf.write(str(wd / "background.wav"), B.T.astype(np.float32), sr, subtype="FLOAT")
+        (wd / "separation_stamp.json").write_text(json.dumps(separation_stamp(src, preset, F.shape[1]), indent=2))
+        return "oracle"
+    if (wd / "separation_stamp.json").exists():
+        return "own-cache"
+    for other in sorted(wd.parent.parent.glob(f"*/{md.name}")):
+        st = other / "separation_stamp.json"
+        if other == wd or not st.exists() or not (other / "vocals.wav").exists():
+            continue
+        old = json.loads(st.read_text())
+        want = separation_stamp(src, preset, old.get("frames", n44 or 0))
+        if old == want:
+            for f in ("vocals.wav", "background.wav", "separation_stamp.json"):
+                shutil.copy2(other / f, wd / f)
+            return f"copied from {other.parent.name}"
+    return "computed"
+
+
 def run(mode: str, preset: str | None, mixes: list[Path], work_root: Path, input_kind: str,
         keep_background: bool) -> dict:
     per_mix = []
@@ -138,24 +188,33 @@ def run(mode: str, preset: str | None, mixes: list[Path], work_root: Path, input
             out_audio = stub_render(md, analysis, keep_background)
         else:
             from voicefilter.pipeline import analyze_file, render_from_analysis
-            wd = work_root / preset / md.name
-            if wd.exists():
-                shutil.rmtree(wd)
-            wd.mkdir(parents=True)
-            src = md / ("mix.mp4" if input_kind == "mp4" else "mix.wav")
+            oracle_sep = mode == "oracle_separation"
+            wd = work_root / ("oracle_sep" if oracle_sep else "real_sep") / preset / md.name
+            src = md / ("mix.wav" if oracle_sep or input_kind == "wav" else "mix.mp4")
+            sep_source = prepare_work_dir(md, preset, wd, src, oracle_sep)
+            t0 = time.time()  # separation reuse/copy is not counted
             analysis = analyze_file(str(src), preset, str(wd), progress=None)
+            notes = " ".join(map(str, analysis.get("notes", [])))
+            reused = "reused" in notes
+            if sep_source != "computed" and not reused:
+                print(f"WARNING {md.name}: separation cache was not reused ({sep_source}); stems recomputed",
+                      flush=True)
+                sep_source = "computed"
             out_path = render_from_analysis(str(wd), analysis, keep_background=keep_background)
             out_audio, out_sr = read_wav(Path(out_path))
             (wd / "analysis.json").write_text(json.dumps(analysis, indent=1, default=float))
         dt = time.time() - t0
         r = score_mix(md, analysis, out_audio, out_sr or 44100, dt)
+        if mode in ("pipeline", "oracle_separation"):
+            r["separation_source"] = sep_source
+            r["timings"] = analysis.get("timings")
         per_mix.append(r)
         fr = r["frames"]
         print(f"{md.name}: acc {fmtp(fr['accuracy'])} male_leak {fmtp(fr['male_leak'])} "
               f"female_loss {fmtp(fr['female_loss'])} overlap_kept {fmtp(fr['overlap_kept'])} "
               f"events {fmtp(r['events'].get('all', {}).get('accuracy'))} rtf {r['rtf']:.2f}", flush=True)
     agg = M.aggregate(per_mix)
-    name = preset if mode == "pipeline" else mode
+    name = preset if mode == "pipeline" else f"oraclesep_{preset}" if mode == "oracle_separation" else mode
     out = {"name": name, "mode": mode, "preset": preset, "input": input_kind, "keep_background": keep_background,
            "created": time.strftime("%Y-%m-%d %H:%M:%S"), "mixes": [p.name for p in mixes], "aggregate": agg,
            "per_mix": [{k: v for k, v in r.items() if k != "event_list"} for r in per_mix]}
@@ -175,7 +234,8 @@ def fmtd(x):
     return "-" if x is None else f"{x:.1f}"
 
 
-ORDER = ["fast", "balanced", "best", "oracle_active", "oracle", "random"]
+ORDER = ["fast", "balanced", "best", "oraclesep_fast", "oraclesep_balanced", "oraclesep_best", "oracle_active",
+         "oracle", "random"]
 
 
 def write_report() -> None:
@@ -190,7 +250,13 @@ def write_report() -> None:
          "(overlap is kept so male voice leaks there, and an event that overlaps the other gender for >20 % of "
          "its frames counts as wrong); `oracle_active` = perfect frame-level gate on the truth active "
          "intervals (upper bound for any gate-only approach); `random` = coin flips on truth events (floor). "
-         "Pipeline runs use the real separated stems; `*_smoke` rows are the 10 s smoke mix only.", "",
+         "Rows `fast` / `balanced` / `best` run the full pipeline on `mix.mp4` with real separation; "
+         "`oraclesep_<preset>` runs the same pipeline but with the TRUE vocal stem (female+male) and background "
+         "written as its separation result, which isolates event detection + gender classification + decisions "
+         "from separation errors. `*_subset` rows use only the mixes listed in their per-mix table, `*_smoke` "
+         "rows only the 10 s smoke mix. RTF = processing time / audio duration on this shared 4-core CPU "
+         "(no GPU, other jobs running); for `oraclesep_*` and runs whose stems were reused from the cache "
+         "(see the per-mix `separation` column) it excludes separation.", "",
          "## Frame-level keep/remove", "",
          "| run | mixes | audio min | acc | bal. acc | male leak | female loss | overlap kept | low-conf share | "
          "acc excl. low-conf | coverage | RTF |",
@@ -220,6 +286,24 @@ def write_report() -> None:
             L.append(f"| {c[9:]} | " + " | ".join(
                 f"{fmtp(r['aggregate']['events'][c]['accuracy'])} (n={r['aggregate']['events'][c]['n']})"
                 if c in r["aggregate"]["events"] else "-" for r in runs) + " |")
+    L += ["", "## Where the errors are (per truth event; lost = female event removed for >20 % of its frames, "
+          "leaked = male event kept for >20 % of its frames)", ""]
+    for r in runs:
+        er = r["aggregate"].get("errors")
+        if not er or r["name"] in ("oracle_active", "oracle", "random"):
+            continue
+        keys = sorted({k.split("|", 1)[1] for k in er}, key=lambda k: (k != "all", not k.startswith("kind"),
+                                                                        k.startswith("category"), k))
+        L += [f"### {r['_file'][:-5]}", "", "| events | female lost (n) | female time lost | male leaked (n) | "
+              "male time leaked |", "|---|---|---|---|---|"]
+        for k in keys:
+            f, m = er.get(f"F|{k}"), er.get(f"M|{k}")
+            cell = lambda c: (f"{c['n_wrong']}/{c['n']}", fmtp(c["wrong_s"] / c["time_s"]) if c["time_s"] else "-") \
+                if c else ("-", "-")
+            fa, fb = cell(f)
+            ma, mb = cell(m)
+            L.append(f"| {k} | {fa} | {fb} | {ma} | {mb} |")
+        L.append("")
     L += ["", "## Audio level (rendered output vs. stems)", "",
           "male residual = energy of the male stem still present in male-only regions (dB re. original, lower "
           "is better); female preserved = same for the female stem in female-only regions (0 dB = intact); "
@@ -234,14 +318,15 @@ def write_report() -> None:
     L += ["", "## Per mix", ""]
     for r in runs:
         L += [f"### {r['_file'][:-5]}", "", "| mix | dur s | comp | bg | SNR dB | reverb | acc | male leak | "
-              "female loss | overlap kept | events | RTF |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+              "female loss | overlap kept | events | RTF | separation |",
+              "|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
         for pm in r["per_mix"]:
             mt, fr = pm.get("meta", {}), pm["frames"]
             L.append(f"| {pm['name']} | {pm['duration']:.0f} | {mt.get('composition', '-')} | "
                      f"{mt.get('background', {}).get('type', '-')} | {mt.get('snr_db', '-')} | {mt.get('reverb', '-')} | "
                      f"{fmtp(fr['accuracy'])} | {fmtp(fr['male_leak'])} | {fmtp(fr['female_loss'])} | "
                      f"{fmtp(fr['overlap_kept'])} | {fmtp(pm['events'].get('all', {}).get('accuracy'))} | "
-                     f"{fmtd(pm.get('rtf'))} |")
+                     f"{fmtd(pm.get('rtf'))} | {pm.get('separation_source', '-')} |")
         L.append("")
     REPORT.write_text("\n".join(L) + "\n", encoding="utf-8")
 
@@ -253,6 +338,9 @@ def main() -> None:
     ap.add_argument("--oracle-active", action="store_true",
                     help="perfect frame-level gate: keep exactly the female-active truth intervals")
     ap.add_argument("--random", action="store_true")
+    ap.add_argument("--oracle-separation", action="store_true",
+                    help="run the pipeline with the TRUE vocal stem (female+male) and background as its "
+                         "separation result: isolates detection/classification/decision from separation")
     ap.add_argument("--mixes", nargs="*", default=None, help="mix directory names (e.g. mix_00 smoke)")
     ap.add_argument("--mixes-root", default=str(MIXES_DIR))
     ap.add_argument("--input", choices=["mp4", "wav"], default="mp4")
@@ -262,8 +350,8 @@ def main() -> None:
     a = ap.parse_args()
     if not a.report_only:
         mode = ("oracle" if a.oracle else "oracle_active" if a.oracle_active else "random" if a.random
-                else "pipeline")
-        if mode == "pipeline" and not a.preset:
+                else "oracle_separation" if a.oracle_separation else "pipeline")
+        if mode in ("pipeline", "oracle_separation") and not a.preset:
             ap.error("--preset is required unless --oracle/--oracle-active/--random")
         mixes = list_mixes(a.mixes, Path(a.mixes_root))
         if not mixes:

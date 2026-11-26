@@ -117,7 +117,8 @@ def event_results(truth: dict, keep: np.ndarray, hop: float = HOP) -> list[dict]
         res.append({"gender": ev["gender"], "kind": ev["kind"], "category": ev["category"],
                     "overlap": bool(ev.get("overlap")), "short": bool(ev.get("short")),
                     "breathy": bool(ev.get("breathy")), "share_right": share,
-                    "correct": share >= EVENT_CORRECT_FRACTION, "duration": float(fr.sum() * hop)})
+                    "correct": share >= EVENT_CORRECT_FRACTION, "duration": float(fr.sum() * hop),
+                    "wrong_s": float((keep[fr] != want).sum() * hop)})
     return res
 
 
@@ -259,6 +260,23 @@ def aggregate(per_mix: list[dict]) -> dict:
             if e["breathy"]:
                 ev["breathy"].append(e["correct"])
     events = {k: {"n": len(v), "accuracy": float(np.mean(v))} for k, v in sorted(ev.items())}
+    # error breakdown: female time lost / male time leaked, by event attribute
+    err = defaultdict(lambda: {"n": 0, "n_wrong": 0, "time_s": 0.0, "wrong_s": 0.0})
+    for r in per_mix:
+        for e in r["event_list"]:
+            keys = ["all", f"kind={e['kind']}", f"category={e['category']}",
+                    "overlap" if e["overlap"] else "no-overlap"]
+            if e["short"]:
+                keys.append("short(<0.4s)")
+            if e["breathy"]:
+                keys.append("breathy/whisper")
+            for k in keys:
+                c = err[(e["gender"], k)]
+                c["n"] += 1
+                c["n_wrong"] += int(not e["correct"])
+                c["time_s"] += e["duration"]
+                c["wrong_s"] += e.get("wrong_s", 0.0)
+    errors = {f"{g}|{k}": v for (g, k), v in sorted(err.items())}
     audio = {}
     for key in ("male_residual_db", "female_preserved_db", "si_sdr_vs_female_plus_bg", "si_sdr_improvement",
                 "male_residual_db_overlap"):
@@ -266,5 +284,6 @@ def aggregate(per_mix: list[dict]) -> dict:
         audio[key + "_mean"] = float(np.mean(vals)) if vals else None
     dur = sum(r["duration"] for r in per_mix)
     t = sum(r.get("processing_s", 0.0) for r in per_mix)
-    return {"n_mixes": len(per_mix), "total_duration_s": dur, "frames": fr, "events": events, "audio": audio,
+    return {"n_mixes": len(per_mix), "total_duration_s": dur, "frames": fr, "events": events, "errors": errors,
+            "audio": audio,
             "processing_s": t, "rtf": t / dur if dur else None}

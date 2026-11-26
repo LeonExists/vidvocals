@@ -4,7 +4,7 @@
  "preset": null,
  "input": "mp4",
  "keep_background": true,
- "created": "2026-11-26 02:11:19",
+ "created": "2026-11-26 02:59:17",
  "mixes": [
   "mix_00",
   "mix_01",
@@ -225,6 +225,428 @@
     "accuracy": 0.8
    }
   },
+  "errors": {
+   "F|all": {
+    "n": 127,
+    "n_wrong": 0,
+    "time_s": 414.37999999999994,
+    "wrong_s": 0.0
+   },
+   "F|breathy/whisper": {
+    "n": 22,
+    "n_wrong": 0,
+    "time_s": 46.74,
+    "wrong_s": 0.0
+   },
+   "F|category=acted_ang": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 1.62,
+    "wrong_s": 0.0
+   },
+   "F|category=acted_dis": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 6.18,
+    "wrong_s": 0.0
+   },
+   "F|category=acted_fea": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 4.84,
+    "wrong_s": 0.0
+   },
+   "F|category=acted_hap": {
+    "n": 5,
+    "n_wrong": 0,
+    "time_s": 11.66,
+    "wrong_s": 0.0
+   },
+   "F|category=acted_sad": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 5.12,
+    "wrong_s": 0.0
+   },
+   "F|category=crying": {
+    "n": 4,
+    "n_wrong": 0,
+    "time_s": 17.52,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_crying": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 2.47,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_ecstasy": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 2.41,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_laughing": {
+    "n": 4,
+    "n_wrong": 0,
+    "time_s": 9.01,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_pain": {
+    "n": 4,
+    "n_wrong": 0,
+    "time_s": 10.229999999999999,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_regular": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 5.960000000000001,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_screaming": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 5.300000000000001,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_yawning": {
+    "n": 5,
+    "n_wrong": 0,
+    "time_s": 15.0,
+    "wrong_s": 0.0
+   },
+   "F|category=laughing": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 2.77,
+    "wrong_s": 0.0
+   },
+   "F|category=moaning": {
+    "n": 4,
+    "n_wrong": 0,
+    "time_s": 9.62,
+    "wrong_s": 0.0
+   },
+   "F|category=panting": {
+    "n": 6,
+    "n_wrong": 0,
+    "time_s": 14.17,
+    "wrong_s": 0.0
+   },
+   "F|category=read": {
+    "n": 55,
+    "n_wrong": 0,
+    "time_s": 265.38,
+    "wrong_s": 0.0
+   },
+   "F|category=screaming": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 3.99,
+    "wrong_s": 0.0
+   },
+   "F|category=short_crying": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.36,
+    "wrong_s": 0.0
+   },
+   "F|category=short_digit": {
+    "n": 6,
+    "n_wrong": 0,
+    "time_s": 1.6500000000000001,
+    "wrong_s": 0.0
+   },
+   "F|category=short_ears_laughing": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.31,
+    "wrong_s": 0.0
+   },
+   "F|category=short_ears_pain": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 0.42000000000000004,
+    "wrong_s": 0.0
+   },
+   "F|category=short_panting": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.23,
+    "wrong_s": 0.0
+   },
+   "F|category=short_throat-clearing": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.23,
+    "wrong_s": 0.0
+   },
+   "F|category=sighing": {
+    "n": 8,
+    "n_wrong": 0,
+    "time_s": 11.02,
+    "wrong_s": 0.0
+   },
+   "F|category=throat-clearing": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.36,
+    "wrong_s": 0.0
+   },
+   "F|category=yawning": {
+    "n": 3,
+    "n_wrong": 0,
+    "time_s": 6.550000000000001,
+    "wrong_s": 0.0
+   },
+   "F|kind=nonverbal": {
+    "n": 52,
+    "n_wrong": 0,
+    "time_s": 111.96999999999998,
+    "wrong_s": 0.0
+   },
+   "F|kind=speech": {
+    "n": 75,
+    "n_wrong": 0,
+    "time_s": 302.4100000000001,
+    "wrong_s": 0.0
+   },
+   "F|no-overlap": {
+    "n": 66,
+    "n_wrong": 0,
+    "time_s": 213.60999999999996,
+    "wrong_s": 0.0
+   },
+   "F|overlap": {
+    "n": 61,
+    "n_wrong": 0,
+    "time_s": 200.76999999999992,
+    "wrong_s": 0.0
+   },
+   "F|short(<0.4s)": {
+    "n": 13,
+    "n_wrong": 0,
+    "time_s": 3.5599999999999996,
+    "wrong_s": 0.0
+   },
+   "M|all": {
+    "n": 165,
+    "n_wrong": 59,
+    "time_s": 414.5200000000001,
+    "wrong_s": 83.29
+   },
+   "M|breathy/whisper": {
+    "n": 63,
+    "n_wrong": 22,
+    "time_s": 164.31999999999996,
+    "wrong_s": 35.879999999999995
+   },
+   "M|category=acted_ang": {
+    "n": 3,
+    "n_wrong": 1,
+    "time_s": 4.5600000000000005,
+    "wrong_s": 1.69
+   },
+   "M|category=acted_dis": {
+    "n": 2,
+    "n_wrong": 2,
+    "time_s": 4.78,
+    "wrong_s": 4.550000000000001
+   },
+   "M|category=acted_hap": {
+    "n": 3,
+    "n_wrong": 0,
+    "time_s": 3.4200000000000004,
+    "wrong_s": 0.0
+   },
+   "M|category=acted_sad": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 3.0,
+    "wrong_s": 1.8900000000000001
+   },
+   "M|category=coughing": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 1.27,
+    "wrong_s": 0.0
+   },
+   "M|category=crying": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 10.18,
+    "wrong_s": 0.0
+   },
+   "M|category=ears_coughing": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 2.45,
+    "wrong_s": 0.56
+   },
+   "M|category=ears_crying": {
+    "n": 5,
+    "n_wrong": 2,
+    "time_s": 14.14,
+    "wrong_s": 2.71
+   },
+   "M|category=ears_ecstasy": {
+    "n": 9,
+    "n_wrong": 2,
+    "time_s": 24.82,
+    "wrong_s": 2.37
+   },
+   "M|category=ears_laughing": {
+    "n": 4,
+    "n_wrong": 1,
+    "time_s": 10.11,
+    "wrong_s": 1.61
+   },
+   "M|category=ears_pain": {
+    "n": 7,
+    "n_wrong": 4,
+    "time_s": 17.35,
+    "wrong_s": 4.36
+   },
+   "M|category=ears_regular": {
+    "n": 32,
+    "n_wrong": 15,
+    "time_s": 89.11999999999998,
+    "wrong_s": 22.25
+   },
+   "M|category=ears_screaming": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 5.29,
+    "wrong_s": 0.0
+   },
+   "M|category=ears_whisper": {
+    "n": 29,
+    "n_wrong": 12,
+    "time_s": 87.0,
+    "wrong_s": 21.580000000000005
+   },
+   "M|category=ears_yawning": {
+    "n": 15,
+    "n_wrong": 4,
+    "time_s": 42.05,
+    "wrong_s": 5.25
+   },
+   "M|category=ears_yelling": {
+    "n": 4,
+    "n_wrong": 0,
+    "time_s": 8.86,
+    "wrong_s": 0.0
+   },
+   "M|category=laughing": {
+    "n": 3,
+    "n_wrong": 1,
+    "time_s": 11.55,
+    "wrong_s": 1.1
+   },
+   "M|category=moaning": {
+    "n": 4,
+    "n_wrong": 0,
+    "time_s": 6.95,
+    "wrong_s": 0.0
+   },
+   "M|category=panting": {
+    "n": 5,
+    "n_wrong": 2,
+    "time_s": 9.96,
+    "wrong_s": 3.42
+   },
+   "M|category=read": {
+    "n": 6,
+    "n_wrong": 1,
+    "time_s": 27.06,
+    "wrong_s": 1.46
+   },
+   "M|category=screaming": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 1.98,
+    "wrong_s": 1.6300000000000001
+   },
+   "M|category=short_digit": {
+    "n": 6,
+    "n_wrong": 2,
+    "time_s": 1.7300000000000002,
+    "wrong_s": 0.58
+   },
+   "M|category=short_ears_coughing": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 0.36,
+    "wrong_s": 0.16
+   },
+   "M|category=short_ears_ecstasy": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.15,
+    "wrong_s": 0.0
+   },
+   "M|category=short_ears_yawning": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 0.58,
+    "wrong_s": 0.0
+   },
+   "M|category=short_moaning": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 0.22,
+    "wrong_s": 0.22
+   },
+   "M|category=short_yawning": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 0.27,
+    "wrong_s": 0.27
+   },
+   "M|category=sighing": {
+    "n": 7,
+    "n_wrong": 2,
+    "time_s": 9.86,
+    "wrong_s": 3.91
+   },
+   "M|category=yawning": {
+    "n": 7,
+    "n_wrong": 2,
+    "time_s": 15.45,
+    "wrong_s": 1.7200000000000002
+   },
+   "M|kind=nonverbal": {
+    "n": 83,
+    "n_wrong": 25,
+    "time_s": 193.84999999999997,
+    "wrong_s": 29.289999999999996
+   },
+   "M|kind=speech": {
+    "n": 82,
+    "n_wrong": 34,
+    "time_s": 220.67,
+    "wrong_s": 54.000000000000014
+   },
+   "M|no-overlap": {
+    "n": 99,
+    "n_wrong": 0,
+    "time_s": 251.26,
+    "wrong_s": 0.01
+   },
+   "M|overlap": {
+    "n": 66,
+    "n_wrong": 59,
+    "time_s": 163.26,
+    "wrong_s": 83.28000000000002
+   },
+   "M|short(<0.4s)": {
+    "n": 12,
+    "n_wrong": 5,
+    "time_s": 3.31,
+    "wrong_s": 1.23
+   }
+  },
   "audio": {
    "male_residual_db_mean": -22.562902094406386,
    "female_preserved_db_mean": 0.001617923579128175,
@@ -232,8 +654,8 @@
    "si_sdr_improvement_mean": 9.992101584934451,
    "male_residual_db_overlap_mean": -0.00605359812697749
   },
-  "processing_s": 4.720907211303711,
-  "rtf": 0.004631973723427589
+  "processing_s": 5.051135778427124,
+  "rtf": 0.004955981372207108
  },
  "per_mix": [
   {
@@ -343,8 +765,8 @@
      "accuracy": 0.5
     }
    },
-   "processing_s": 0.3316526412963867,
-   "rtf": 0.005208140892969383,
+   "processing_s": 0.35755014419555664,
+   "rtf": 0.005614824956596136,
    "n_segments": 18,
    "meta": {
     "seed": 2024,
@@ -512,8 +934,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.5495426654815674,
-   "rtf": 0.004819565153055114,
+   "processing_s": 0.5169768333435059,
+   "rtf": 0.0045339583028293825,
    "n_segments": 37,
    "meta": {
     "seed": 2024,
@@ -662,8 +1084,8 @@
      "accuracy": 0.6666666666666666
     }
    },
-   "processing_s": 0.46398377418518066,
-   "rtf": 0.004876531973634199,
+   "processing_s": 0.4887969493865967,
+   "rtf": 0.005137321787781448,
    "n_segments": 24,
    "meta": {
     "seed": 2024,
@@ -843,8 +1265,8 @@
      "accuracy": 0.6666666666666666
     }
    },
-   "processing_s": 0.45386600494384766,
-   "rtf": 0.004591772577750331,
+   "processing_s": 0.4691495895385742,
+   "rtf": 0.004746396946765313,
    "n_segments": 27,
    "meta": {
     "seed": 2024,
@@ -963,8 +1385,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.29570603370666504,
-   "rtf": 0.004648791352378521,
+   "processing_s": 0.3325779438018799,
+   "rtf": 0.0052284542515344725,
    "n_segments": 12,
    "meta": {
     "seed": 2024,
@@ -1093,8 +1515,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.45566892623901367,
-   "rtf": 0.00470046264226137,
+   "processing_s": 0.49462223052978516,
+   "rtf": 0.005102286293311408,
    "n_segments": 26,
    "meta": {
     "seed": 2024,
@@ -1244,8 +1666,8 @@
      "accuracy": 0.5
     }
    },
-   "processing_s": 0.3764190673828125,
-   "rtf": 0.0042324773422172685,
+   "processing_s": 0.38382959365844727,
+   "rtf": 0.004315801719947667,
    "n_segments": 27,
    "meta": {
     "seed": 2024,
@@ -1416,8 +1838,8 @@
      "accuracy": 0.5
     }
    },
-   "processing_s": 0.3185536861419678,
-   "rtf": 0.004435572775391304,
+   "processing_s": 0.37421703338623047,
+   "rtf": 0.005210634682895869,
    "n_segments": 19,
    "meta": {
     "seed": 2024,
@@ -1588,8 +2010,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.2975935935974121,
-   "rtf": 0.004284589444024573,
+   "processing_s": 0.3598308563232422,
+   "rtf": 0.005180647439348283,
    "n_segments": 26,
    "meta": {
     "seed": 2024,
@@ -1759,8 +2181,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.27672505378723145,
-   "rtf": 0.0041161489284974595,
+   "processing_s": 0.361680269241333,
+   "rtf": 0.0053798159303676246,
    "n_segments": 27,
    "meta": {
     "seed": 2024,
@@ -1908,8 +2330,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.5265641212463379,
-   "rtf": 0.004757256604809846,
+   "processing_s": 0.5111327171325684,
+   "rtf": 0.004617841201861462,
    "n_segments": 26,
    "meta": {
     "seed": 2024,
@@ -2064,8 +2486,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.3746316432952881,
-   "rtf": 0.004752357000993484,
+   "processing_s": 0.4007716178894043,
+   "rtf": 0.005083953366360367,
    "n_segments": 23,
    "meta": {
     "seed": 2024,

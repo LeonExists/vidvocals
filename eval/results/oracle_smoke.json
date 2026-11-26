@@ -4,7 +4,7 @@
  "preset": null,
  "input": "mp4",
  "keep_background": true,
- "created": "2026-11-26 02:11:41",
+ "created": "2026-11-26 02:59:45",
  "mixes": [
   "smoke"
  ],
@@ -78,6 +78,98 @@
     "accuracy": 1.0
    }
   },
+  "errors": {
+   "F|all": {
+    "n": 2,
+    "n_wrong": 0,
+    "time_s": 3.2600000000000002,
+    "wrong_s": 0.0
+   },
+   "F|category=ears_regular": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 2.99,
+    "wrong_s": 0.0
+   },
+   "F|category=short_ears_yelling": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.27,
+    "wrong_s": 0.0
+   },
+   "F|kind=nonverbal": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.27,
+    "wrong_s": 0.0
+   },
+   "F|kind=speech": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 2.99,
+    "wrong_s": 0.0
+   },
+   "F|no-overlap": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.27,
+    "wrong_s": 0.0
+   },
+   "F|overlap": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 2.99,
+    "wrong_s": 0.0
+   },
+   "F|short(<0.4s)": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 0.27,
+    "wrong_s": 0.0
+   },
+   "M|all": {
+    "n": 2,
+    "n_wrong": 1,
+    "time_s": 4.58,
+    "wrong_s": 0.48
+   },
+   "M|category=ears_regular": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 3.0,
+    "wrong_s": 0.0
+   },
+   "M|category=moaning": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 1.58,
+    "wrong_s": 0.48
+   },
+   "M|kind=nonverbal": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 1.58,
+    "wrong_s": 0.48
+   },
+   "M|kind=speech": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 3.0,
+    "wrong_s": 0.0
+   },
+   "M|no-overlap": {
+    "n": 1,
+    "n_wrong": 0,
+    "time_s": 3.0,
+    "wrong_s": 0.0
+   },
+   "M|overlap": {
+    "n": 1,
+    "n_wrong": 1,
+    "time_s": 1.58,
+    "wrong_s": 0.48
+   }
+  },
   "audio": {
    "male_residual_db_mean": -24.082266322721345,
    "female_preserved_db_mean": -0.05420068374697733,
@@ -85,8 +177,8 @@
    "si_sdr_improvement_mean": 10.23867694801688,
    "male_residual_db_overlap_mean": -0.6420813642526234
   },
-  "processing_s": 0.0884864330291748,
-  "rtf": 0.00884864330291748
+  "processing_s": 0.07024741172790527,
+  "rtf": 0.007024741172790528
  },
  "per_mix": [
   {
@@ -168,8 +260,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 0.0884864330291748,
-   "rtf": 0.00884864330291748,
+   "processing_s": 0.07024741172790527,
+   "rtf": 0.007024741172790528,
    "n_segments": 4,
    "meta": {
     "seed": 99,
