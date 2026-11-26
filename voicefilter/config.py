@@ -88,7 +88,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "low_conf_threshold": 0.6,     # confidence = |2p-1| below this -> low_confidence
     "fade_ms": 15.0,               # raised-cosine fade length at every gain boundary
     "gate_unlabeled": "keep",      # vocal-stem regions without any event: keep|mute
-    "low_conf_default": "model",   # model|keep|remove : decision for low-confidence segments
+    "low_conf_default": "model",   # model|keep|remove : render-time override for low-confidence segments
+    # decision defaults are tuned per preset (presets.py "decision"); setting these in
+    # config.json / VF_* env vars overrides every preset
+    "decision_threshold": 0.5,     # keep a segment if p_female >= this
+    "unsure_policy": "model",      # model|keep|remove : model decision for low-confidence segments
     "overlap_policy": "p_female",  # overlap without separation: p_female|keep|remove
     "max_upload_bytes": 0,         # 0 = unlimited
     "preview_debounce_s": 1.0,
@@ -111,6 +115,15 @@ for _k in DEFAULT_SETTINGS:
 
 def setting(key: str) -> Any:
     return SETTINGS.get(key, DEFAULT_SETTINGS.get(key))
+
+
+USER_SET: set[str] = {k for k in DEFAULT_SETTINGS
+                      if k in FILE_CONFIG or os.environ.get("VF_" + k.upper()) not in (None, "")}
+
+
+def user_setting(key: str) -> Any:
+    """The setting if the user set it (config.json or VF_* env var), else None."""
+    return SETTINGS.get(key) if key in USER_SET else None
 
 
 # ---------------------------------------------------------------------------

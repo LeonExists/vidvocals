@@ -1,1 +1,5 @@
 mix_00: acc 87.4% male_leak 13.1% female_loss 11.8% overlap_kept 72.9% events 66.7% rtf 0.87
+mix_01: acc 68.2% male_leak 43.1% female_loss 6.6% overlap_kept 70.7% events 40.5% rtf 0.75
+mix_02: acc 95.3% male_leak 10.8% female_loss 1.3% overlap_kept 69.0% events 66.7% rtf 12.10
+mix_03: acc 84.0% male_leak 43.2% female_loss 2.7% overlap_kept 84.6% events 51.9% rtf 11.68
+mix_04: acc 95.5% male_leak - female_loss 4.5% overlap_kept - events 91.7% rtf 12.70

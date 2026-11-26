@@ -4,7 +4,7 @@
  "preset": "best",
  "input": "mp4",
  "keep_background": true,
- "created": "2026-11-26 04:08:12",
+ "created": "2026-11-26 04:55:37",
  "mixes": [
   "mix_00",
   "mix_01",
@@ -648,14 +648,14 @@
    }
   },
   "audio": {
-   "male_residual_db_mean": -9.424255166625661,
-   "female_preserved_db_mean": -0.4237824823640934,
-   "si_sdr_vs_female_plus_bg_mean": 20.820744263319494,
-   "si_sdr_improvement_mean": -6.721541908824459,
-   "male_residual_db_overlap_mean": -4.653104270911906
+   "male_residual_db_mean": -9.424856655679104,
+   "female_preserved_db_mean": -0.42386847861633037,
+   "si_sdr_vs_female_plus_bg_mean": 20.820825309057046,
+   "si_sdr_improvement_mean": 4.9443176880274935,
+   "male_residual_db_overlap_mean": -4.639726865687692
   },
-  "processing_s": 1695.682646036148,
-  "rtf": 1.6637390035765114
+  "processing_s": 406.8019664287567,
+  "rtf": 0.3991385415550906
  },
  "per_mix": [
   {
@@ -765,8 +765,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 105.0233108997345,
-   "rtf": 1.649244215495725,
+   "processing_s": 39.302576541900635,
+   "rtf": 0.6171919972861136,
    "n_segments": 23,
    "meta": {
     "seed": 2024,
@@ -793,24 +793,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -12.577538736758845,
-    "female_preserved_db": -0.33859946891081916,
-    "male_residual_db_overlap": -3.2311877560327784,
-    "female_preserved_db_overlap": -0.45845982263917534,
-    "si_sdr_vs_female_plus_bg": 5.9580606209680465,
+    "male_residual_db": -12.577519005972544,
+    "female_preserved_db": -0.3393380103653092,
+    "male_residual_db_overlap": -3.2310205145985593,
+    "female_preserved_db_overlap": -0.4631273699374081,
+    "si_sdr_vs_female_plus_bg": 5.951659278409145,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": -3.6008867116980827,
-    "si_sdr_improvement": 9.55894733266613
+    "si_sdr_mix_vs_female_plus_bg": -3.6008867116981103,
+    "si_sdr_improvement": 9.552545990107255
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.37,
+    "extract": 0.16,
     "separate": 0.0,
-    "activity": 0.88,
-    "features": 69.82,
-    "speakers": 0.71,
-    "overlap": 26.9,
-    "preview": 5.16
+    "activity": 0.06,
+    "features": 6.98,
+    "speakers": 0.0,
+    "overlap": 25.62,
+    "preview": 5.21
    }
   },
   {
@@ -944,8 +944,8 @@
      "accuracy": 0.0
     }
    },
-   "processing_s": 202.69143271446228,
-   "rtf": 1.7776318879215471,
+   "processing_s": 45.58664608001709,
+   "rtf": 0.3998011886836406,
    "n_segments": 38,
    "meta": {
     "seed": 2024,
@@ -973,24 +973,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -5.266431181327199,
-    "female_preserved_db": -0.008954709172844993,
-    "male_residual_db_overlap": -2.6423125633917497,
-    "female_preserved_db_overlap": -0.6958532308224976,
-    "si_sdr_vs_female_plus_bg": 9.038614447913778,
+    "male_residual_db": -5.266428010559883,
+    "female_preserved_db": -0.008954712006834481,
+    "male_residual_db_overlap": -2.6428301571871957,
+    "female_preserved_db_overlap": -0.6903168233965452,
+    "si_sdr_vs_female_plus_bg": 9.042915830836893,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 5.151256201650707,
-    "si_sdr_improvement": 3.887358246263071
+    "si_sdr_mix_vs_female_plus_bg": 5.151256201650564,
+    "si_sdr_improvement": 3.8916596291863295
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.58,
+    "extract": 0.46,
     "separate": 0.0,
-    "activity": 0.82,
-    "features": 154.86,
-    "speakers": 0.01,
-    "overlap": 39.17,
-    "preview": 6.85
+    "activity": 0.1,
+    "features": 7.82,
+    "speakers": 0.0,
+    "overlap": 30.06,
+    "preview": 6.68
    }
   },
   {
@@ -1104,8 +1104,8 @@
      "accuracy": 0.3333333333333333
     }
    },
-   "processing_s": 165.33070421218872,
-   "rtf": 1.7376479742854496,
+   "processing_s": 41.674076080322266,
+   "rtf": 0.43800015385073904,
    "n_segments": 30,
    "meta": {
     "seed": 2024,
@@ -1132,24 +1132,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -10.430643777990266,
-    "female_preserved_db": 0.0032696837023912725,
-    "male_residual_db_overlap": -7.055628944578479,
-    "female_preserved_db_overlap": -2.1518952085538876,
-    "si_sdr_vs_female_plus_bg": 10.692245283566704,
+    "male_residual_db": -10.430643770329336,
+    "female_preserved_db": 0.0032697031106433427,
+    "male_residual_db_overlap": -7.055630804517149,
+    "female_preserved_db_overlap": -2.152701305168439,
+    "si_sdr_vs_female_plus_bg": 10.69213401492105,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 1.9289693357590607,
-    "si_sdr_improvement": 8.763275947807644
+    "si_sdr_mix_vs_female_plus_bg": 1.9289693357589475,
+    "si_sdr_improvement": 8.763164679162102
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.44,
+    "extract": 0.54,
     "separate": 0.0,
-    "activity": 0.6,
-    "features": 124.41,
-    "speakers": 0.01,
-    "overlap": 32.66,
-    "preview": 6.89
+    "activity": 0.08,
+    "features": 6.7,
+    "speakers": 0.0,
+    "overlap": 27.39,
+    "preview": 6.61
    }
   },
   {
@@ -1295,8 +1295,8 @@
      "accuracy": 0.6666666666666666
     }
    },
-   "processing_s": 185.54000210762024,
-   "rtf": 1.8771123734171575,
+   "processing_s": 44.03146934509277,
+   "rtf": 0.44546736546586113,
    "n_segments": 29,
    "meta": {
     "seed": 2024,
@@ -1326,24 +1326,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -8.581192705684247,
-    "female_preserved_db": -0.2545817088472951,
-    "male_residual_db_overlap": -3.091189125543876,
-    "female_preserved_db_overlap": -2.2902496731421125,
-    "si_sdr_vs_female_plus_bg": 8.349708014142173,
+    "male_residual_db": -8.581192746205568,
+    "female_preserved_db": -0.2545817071670051,
+    "male_residual_db_overlap": -3.091189137995144,
+    "female_preserved_db_overlap": -2.290248117993136,
+    "si_sdr_vs_female_plus_bg": 8.34970824628744,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 6.80470950333822,
-    "si_sdr_improvement": 1.5449985108039535
+    "si_sdr_mix_vs_female_plus_bg": 6.80470950333819,
+    "si_sdr_improvement": 1.5449987429492502
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.52,
+    "extract": 0.58,
     "separate": 0.0,
-    "activity": 0.64,
-    "features": 134.97,
-    "speakers": 0.01,
-    "overlap": 42.14,
-    "preview": 6.9
+    "activity": 0.08,
+    "features": 7.22,
+    "speakers": 0.0,
+    "overlap": 28.92,
+    "preview": 6.86
    }
   },
   {
@@ -1425,8 +1425,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 99.75505256652832,
-   "rtf": 1.5682481007045113,
+   "processing_s": 25.846372842788696,
+   "rtf": 0.4063305474554439,
    "n_segments": 17,
    "meta": {
     "seed": 2024,
@@ -1458,20 +1458,20 @@
     "female_preserved_db": 0.0013021203869070502,
     "male_residual_db_overlap": null,
     "female_preserved_db_overlap": null,
-    "si_sdr_vs_female_plus_bg": 151.39787456621616,
+    "si_sdr_vs_female_plus_bg": 151.39787456621588,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 148.83646287369606,
-    "si_sdr_improvement": 2.561411692520096
+    "si_sdr_mix_vs_female_plus_bg": 148.8364628737308,
+    "si_sdr_improvement": 2.5614116924850805
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.39,
+    "extract": 0.4,
     "separate": 0.0,
-    "activity": 0.49,
-    "features": 71.81,
+    "activity": 0.06,
+    "features": 4.1,
     "speakers": 0.0,
-    "overlap": 23.08,
-    "preview": 3.81
+    "overlap": 17.25,
+    "preview": 3.85
    }
   },
   {
@@ -1565,8 +1565,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 157.10026669502258,
-   "rtf": 1.6205711914222414,
+   "processing_s": 35.23280954360962,
+   "rtf": 0.3634448071949032,
    "n_segments": 29,
    "meta": {
     "seed": 2024,
@@ -1591,24 +1591,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -5.739858147441115,
+    "male_residual_db": -5.739795322444319,
     "female_preserved_db": null,
     "male_residual_db_overlap": null,
     "female_preserved_db_overlap": null,
-    "si_sdr_vs_female_plus_bg": 7.813711252486419,
+    "si_sdr_vs_female_plus_bg": 7.8134880929699735,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 2.527021753884457,
-    "si_sdr_improvement": 5.286689498601962
+    "si_sdr_mix_vs_female_plus_bg": 2.527021753884225,
+    "si_sdr_improvement": 5.286466339085749
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.52,
+    "extract": 0.54,
     "separate": 0.0,
-    "activity": 0.74,
-    "features": 117.6,
-    "speakers": 0.01,
-    "overlap": 31.21,
-    "preview": 6.65
+    "activity": 0.09,
+    "features": 5.48,
+    "speakers": 0.0,
+    "overlap": 22.34,
+    "preview": 6.35
    }
   },
   {
@@ -1726,8 +1726,8 @@
      "accuracy": 0.0
     }
    },
-   "processing_s": 167.4659914970398,
-   "rtf": 1.8829971062075233,
+   "processing_s": 38.14931130409241,
+   "rtf": 0.42895301993710017,
    "n_segments": 35,
    "meta": {
     "seed": 2024,
@@ -1757,24 +1757,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -16.13818684523231,
-    "female_preserved_db": -0.10079746320530042,
-    "male_residual_db_overlap": -5.001968493576707,
-    "female_preserved_db_overlap": -1.2270238666958393,
-    "si_sdr_vs_female_plus_bg": 9.74799139135924,
+    "male_residual_db": -16.138186578390524,
+    "female_preserved_db": -0.10079746343258547,
+    "male_residual_db_overlap": -5.001968505679706,
+    "female_preserved_db_overlap": -1.2270239118715296,
+    "si_sdr_vs_female_plus_bg": 9.747991376886567,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 6.011767286386255,
-    "si_sdr_improvement": 3.736224104972986
+    "si_sdr_mix_vs_female_plus_bg": 6.0117672863862275,
+    "si_sdr_improvement": 3.7362240905003397
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.49,
+    "extract": 0.5,
     "separate": 0.0,
-    "activity": 0.65,
-    "features": 124.15,
-    "speakers": 0.01,
-    "overlap": 35.62,
-    "preview": 6.24
+    "activity": 0.07,
+    "features": 5.95,
+    "speakers": 0.0,
+    "overlap": 25.01,
+    "preview": 6.22
    }
   },
   {
@@ -1908,8 +1908,8 @@
      "accuracy": 0.0
     }
    },
-   "processing_s": 120.87124347686768,
-   "rtf": 1.6830230514261038,
+   "processing_s": 27.43736481666565,
+   "rtf": 0.3820405592639851,
    "n_segments": 23,
    "meta": {
     "seed": 2024,
@@ -1940,23 +1940,23 @@
    },
    "audio": {
     "male_residual_db": -5.075055303562684,
-    "female_preserved_db": -0.2733273109517488,
-    "male_residual_db_overlap": -6.184031353351448,
-    "female_preserved_db_overlap": -2.368477806940295,
-    "si_sdr_vs_female_plus_bg": 5.024153156953251,
+    "female_preserved_db": -0.27345425523819766,
+    "male_residual_db_overlap": -6.18333937910257,
+    "female_preserved_db_overlap": -2.354827266503533,
+    "si_sdr_vs_female_plus_bg": 5.028261937839151,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 2.074268022861861,
-    "si_sdr_improvement": 2.9498851340913905
+    "si_sdr_mix_vs_female_plus_bg": 2.0742680228618497,
+    "si_sdr_improvement": 2.953993914977301
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.38,
+    "extract": 0.46,
     "separate": 0.0,
-    "activity": 0.53,
-    "features": 90.51,
-    "speakers": 0.01,
-    "overlap": 24.8,
-    "preview": 4.42
+    "activity": 0.06,
+    "features": 4.99,
+    "speakers": 0.0,
+    "overlap": 17.54,
+    "preview": 4.16
    }
   },
   {
@@ -2090,8 +2090,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 103.11374139785767,
-   "rtf": 1.4845751300843277,
+   "processing_s": 27.24173593521118,
+   "rtf": 0.39221158229236064,
    "n_segments": 31,
    "meta": {
     "seed": 2024,
@@ -2116,24 +2116,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -11.989576754894912,
-    "female_preserved_db": -1.2315459930253707,
-    "male_residual_db_overlap": -3.411196334644834,
-    "female_preserved_db_overlap": -0.20253739499370377,
-    "si_sdr_vs_female_plus_bg": 5.800963536952058,
+    "male_residual_db": -11.987215795321635,
+    "female_preserved_db": -1.23154459550497,
+    "male_residual_db_overlap": -3.304516830245834,
+    "female_preserved_db_overlap": -0.20659627903190328,
+    "si_sdr_vs_female_plus_bg": 5.790558230337056,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 7.546576908218581,
-    "si_sdr_improvement": -1.745613371266523
+    "si_sdr_mix_vs_female_plus_bg": 7.546576908218538,
+    "si_sdr_improvement": -1.7560186778814817
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.4,
+    "extract": 0.36,
     "separate": 0.0,
-    "activity": 0.45,
-    "features": 75.3,
+    "activity": 0.06,
+    "features": 3.89,
     "speakers": 0.0,
-    "overlap": 22.34,
-    "preview": 4.35
+    "overlap": 18.42,
+    "preview": 4.25
    }
   },
   {
@@ -2271,8 +2271,8 @@
      "accuracy": 0.0
     }
    },
-   "processing_s": 117.43384766578674,
-   "rtf": 1.7467706650461794,
+   "processing_s": 26.43511176109314,
+   "rtf": 0.39320927202275185,
    "n_segments": 27,
    "meta": {
     "seed": 2024,
@@ -2299,24 +2299,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -7.697108404466952,
-    "female_preserved_db": -1.9105483063137596,
+    "male_residual_db": -7.697108405098633,
+    "female_preserved_db": -1.9105441986428588,
     "male_residual_db_overlap": -6.607319596175378,
     "female_preserved_db_overlap": -2.6247905973721037,
-    "si_sdr_vs_female_plus_bg": 10.319424039729473,
+    "si_sdr_vs_female_plus_bg": 10.319425923494766,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 5.479366657643688,
-    "si_sdr_improvement": 4.840057382085785
+    "si_sdr_mix_vs_female_plus_bg": 5.479366657643635,
+    "si_sdr_improvement": 4.8400592658511306
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.37,
+    "extract": 0.34,
     "separate": 0.0,
-    "activity": 0.5,
-    "features": 88.51,
-    "speakers": 0.01,
-    "overlap": 23.3,
-    "preview": 4.49
+    "activity": 0.06,
+    "features": 4.02,
+    "speakers": 0.0,
+    "overlap": 17.34,
+    "preview": 4.37
    }
   },
   {
@@ -2430,8 +2430,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 157.24494218826294,
-   "rtf": 1.4206333276704595,
+   "processing_s": 31.949588298797607,
+   "rtf": 0.28864934738746667,
    "n_segments": 29,
    "meta": {
     "seed": 2024,
@@ -2467,18 +2467,18 @@
     "female_preserved_db_overlap": null,
     "si_sdr_vs_female_plus_bg": 16.209023793440696,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": 148.87114272327753,
-    "si_sdr_improvement": -132.66211892983682
+    "si_sdr_mix_vs_female_plus_bg": 148.8711427232552,
+    "si_sdr_improvement": -132.66211892981448
    },
    "separation_source": "oracle",
    "timings": {
-    "extract": 0.53,
+    "extract": 0.62,
     "separate": 0.0,
-    "activity": 0.79,
-    "features": 124.09,
-    "speakers": 0.01,
-    "overlap": 25.08,
-    "preview": 6.45
+    "activity": 0.09,
+    "features": 6.05,
+    "speakers": 0.0,
+    "overlap": 18.71,
+    "preview": 6.16
    }
   },
   {
@@ -2596,8 +2596,8 @@
      "accuracy": 1.0
     }
    },
-   "processing_s": 114.11211061477661,
-   "rtf": 1.4475592157890131,
+   "processing_s": 23.91490387916565,
+   "rtf": 0.3033704250888851,
    "n_segments": 30,
    "meta": {
     "seed": 2024,
@@ -2627,24 +2627,24 @@
     "stems_sum_to_mix": true
    },
    "audio": {
-    "male_residual_db": -10.746959808898085,
+    "male_residual_db": -10.755421618905894,
     "female_preserved_db": null,
     "male_residual_db_overlap": null,
     "female_preserved_db_overlap": null,
-    "si_sdr_vs_female_plus_bg": 9.497161056105906,
+    "si_sdr_vs_female_plus_bg": 9.506862417045893,
     "length_diff_samples": 0,
-    "si_sdr_mix_vs_female_plus_bg": -1.1232204892909161,
-    "si_sdr_improvement": 10.620381545396821
+    "si_sdr_mix_vs_female_plus_bg": -1.123220489291064,
+    "si_sdr_improvement": 10.630082906336957
    },
    "separation_source": "oracle",
    "timings": {
     "extract": 0.43,
     "separate": 0.0,
-    "activity": 0.58,
-    "features": 90.17,
-    "speakers": 0.01,
-    "overlap": 17.51,
-    "preview": 5.07
+    "activity": 0.07,
+    "features": 4.36,
+    "speakers": 0.0,
+    "overlap": 13.87,
+    "preview": 4.85
    }
   }
  ]

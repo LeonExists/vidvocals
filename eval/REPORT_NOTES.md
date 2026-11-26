@@ -1,3 +1,11 @@
+## Dev / test split for tuning (fixed 2026-11-26, before any tuning change)
+
+- **dev** (all tuning and parameter selection): mix_00, mix_02, mix_04, mix_05, mix_06, mix_08
+- **test** (scored once at the end, never iterated on): mix_01, mix_03, mix_07, mix_09, mix_10, mix_11
+- Both halves contain one female-only mix (mix_04 dev / mix_10 test) and one male-only mix (mix_05 dev /
+  mix_11 test; mix_11 also has sung vocals in the background music). The split is also in `eval/splits.json`
+  under `"tuning"`.
+
 ## Baseline findings (hand-written, 2026-11-26; numbers below are the baseline before tuning)
 
 - **Which mixes**: all `oraclesep_*`, `oracle*` and `random` rows use all 12 mixes (17.0 min, 292 truth

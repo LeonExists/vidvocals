@@ -923,5 +923,24 @@
   "ears": 0.5,
   "librispeech": 0.4
  },
- "version": 1
+ "version": 1,
+ "tuning": {
+  "dev": [
+   "mix_00",
+   "mix_02",
+   "mix_04",
+   "mix_05",
+   "mix_06",
+   "mix_08"
+  ],
+  "test": [
+   "mix_01",
+   "mix_03",
+   "mix_07",
+   "mix_09",
+   "mix_10",
+   "mix_11"
+  ],
+  "note": "pipeline decision tuning split (mixes), fixed before tuning; tune on dev only"
+ }
 }

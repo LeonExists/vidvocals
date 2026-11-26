@@ -1,0 +1,211 @@
+{
+ "name": "balanced",
+ "mode": "pipeline",
+ "preset": "balanced",
+ "input": "mp4",
+ "keep_background": true,
+ "created": "2026-11-26 03:01:43",
+ "mixes": [
+  "smoke"
+ ],
+ "aggregate": {
+  "n_mixes": 1,
+  "total_duration_s": 10.0,
+  "frames": {
+   "frames_female_only": 278,
+   "frames_male_only": 410,
+   "frames_overlap": 48,
+   "male_leak": 0.23902439024390243,
+   "female_loss": 0.20503597122302158,
+   "overlap_kept": 1.0,
+   "accuracy": 0.7747093023255814,
+   "balanced_accuracy": 0.777969819266538,
+   "low_conf_share_mean_over_mixes": 0.0,
+   "accuracy_excl_low_conf_mean_over_mixes": 0.7747093023255814,
+   "coverage_mean_over_mixes": 0.8016304347826086
+  },
+  "events": {
+   "all": {
+    "n": 4,
+    "accuracy": 0.5
+   },
+   "category=ears_regular": {
+    "n": 2,
+    "accuracy": 1.0
+   },
+   "category=moaning": {
+    "n": 1,
+    "accuracy": 0.0
+   },
+   "category=short_ears_yelling": {
+    "n": 1,
+    "accuracy": 0.0
+   },
+   "kind=nonverbal": {
+    "n": 2,
+    "accuracy": 0.0
+   },
+   "kind=nonverbal,gender=F": {
+    "n": 1,
+    "accuracy": 0.0
+   },
+   "kind=nonverbal,gender=M": {
+    "n": 1,
+    "accuracy": 0.0
+   },
+   "kind=speech": {
+    "n": 2,
+    "accuracy": 1.0
+   },
+   "kind=speech,gender=F": {
+    "n": 1,
+    "accuracy": 1.0
+   },
+   "kind=speech,gender=M": {
+    "n": 1,
+    "accuracy": 1.0
+   },
+   "overlap=False": {
+    "n": 2,
+    "accuracy": 0.5
+   },
+   "overlap=True": {
+    "n": 2,
+    "accuracy": 0.5
+   },
+   "short(<0.4s)": {
+    "n": 1,
+    "accuracy": 0.0
+   }
+  },
+  "audio": {
+   "male_residual_db_mean": -3.939297328141293,
+   "female_preserved_db_mean": -1.1435949668231513,
+   "si_sdr_vs_female_plus_bg_mean": 9.422223729845093,
+   "si_sdr_improvement_mean": 0.7735353555691091,
+   "male_residual_db_overlap_mean": -0.6821741166699828
+  },
+  "processing_s": 381.60905623435974,
+  "rtf": 38.16090562343597
+ },
+ "per_mix": [
+  {
+   "name": "smoke",
+   "duration": 10.0,
+   "frames": {
+    "frames_female_only": 278,
+    "frames_male_only": 410,
+    "frames_overlap": 48,
+    "accuracy": 0.7747093023255814,
+    "male_leak": 0.23902439024390243,
+    "female_loss": 0.20503597122302158,
+    "overlap_kept": 1.0,
+    "low_conf_share": 0.0,
+    "accuracy_excl_low_conf": 0.7747093023255814,
+    "accuracy_low_conf_only": null,
+    "coverage": 0.8016304347826086,
+    "balanced_accuracy": 0.777969819266538
+   },
+   "events": {
+    "all": {
+     "n": 4,
+     "accuracy": 0.5
+    },
+    "category=ears_regular": {
+     "n": 2,
+     "accuracy": 1.0
+    },
+    "category=moaning": {
+     "n": 1,
+     "accuracy": 0.0
+    },
+    "category=short_ears_yelling": {
+     "n": 1,
+     "accuracy": 0.0
+    },
+    "gender=F": {
+     "n": 2,
+     "accuracy": 0.5
+    },
+    "gender=M": {
+     "n": 2,
+     "accuracy": 0.5
+    },
+    "kind=nonverbal": {
+     "n": 2,
+     "accuracy": 0.0
+    },
+    "kind=nonverbal,gender=F": {
+     "n": 1,
+     "accuracy": 0.0
+    },
+    "kind=nonverbal,gender=M": {
+     "n": 1,
+     "accuracy": 0.0
+    },
+    "kind=speech": {
+     "n": 2,
+     "accuracy": 1.0
+    },
+    "kind=speech,gender=F": {
+     "n": 1,
+     "accuracy": 1.0
+    },
+    "kind=speech,gender=M": {
+     "n": 1,
+     "accuracy": 1.0
+    },
+    "overlap=False": {
+     "n": 2,
+     "accuracy": 0.5
+    },
+    "overlap=True": {
+     "n": 2,
+     "accuracy": 0.5
+    },
+    "short(<0.4s)": {
+     "n": 1,
+     "accuracy": 0.0
+    }
+   },
+   "processing_s": 381.60905623435974,
+   "rtf": 38.16090562343597,
+   "n_segments": 6,
+   "meta": {
+    "seed": 99,
+    "index": 0,
+    "composition": "mixed",
+    "n_speakers": 2,
+    "background": {
+     "type": "esc_noise",
+     "categories": [
+      "keyboard_typing",
+      "train",
+      "thunderstorm"
+     ]
+    },
+    "snr_db": -4.34,
+    "reverb": false,
+    "wet": 0.0,
+    "hard_cases": [],
+    "female_active_s": 3.26,
+    "male_active_s": 4.58,
+    "overlap_share_of_vocal_time": 0.0652,
+    "n_events": 4,
+    "n_short": 1,
+    "n_nonverbal": 2,
+    "stems_sum_to_mix": true
+   },
+   "audio": {
+    "male_residual_db": -3.939297328141293,
+    "female_preserved_db": -1.1435949668231513,
+    "male_residual_db_overlap": -0.6821741166699828,
+    "female_preserved_db_overlap": -0.9688804539858176,
+    "si_sdr_vs_female_plus_bg": 9.422223729845093,
+    "length_diff_samples": 344,
+    "si_sdr_mix_vs_female_plus_bg": 8.648688374275984,
+    "si_sdr_improvement": 0.7735353555691091
+   }
+  }
+ ]
+}

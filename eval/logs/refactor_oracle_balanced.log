@@ -1,0 +1,37 @@
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_00: acc 86.2% male_leak 14.9% female_loss 11.8% overlap_kept 60.4% events 66.7% rtf 1.16
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_01: acc 82.1% male_leak 25.8% female_loss 0.0% overlap_kept 71.1% events 51.4% rtf 0.86
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_02: acc 95.6% male_leak 11.0% female_loss 0.7% overlap_kept 61.7% events 66.7% rtf 0.88
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_03: acc 93.2% male_leak 11.5% female_loss 4.5% overlap_kept 75.2% events 59.3% rtf 0.93
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_04: acc 99.8% male_leak - female_loss 0.2% overlap_kept - events 100.0% rtf 0.74
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_05: acc 85.8% male_leak 14.2% female_loss - overlap_kept - events 84.6% rtf 0.83
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_06: acc 91.6% male_leak 17.8% female_loss 2.7% overlap_kept 63.4% events 55.6% rtf 0.95
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_07: acc 79.0% male_leak 43.4% female_loss 5.0% overlap_kept 72.2% events 57.9% rtf 0.99
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_08: acc 83.6% male_leak 8.0% female_loss 22.5% overlap_kept 70.9% events 61.5% rtf 0.98
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_09: acc 78.7% male_leak 17.1% female_loss 31.2% overlap_kept 42.4% events 55.6% rtf 1.17
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_10: acc 95.9% male_leak - female_loss 4.1% overlap_kept - events 96.2% rtf 0.82
+/home/user/vidvocals/voicefilter/features.py:174: RuntimeWarning: invalid value encountered in divide
+  shift = np.where(np.abs(den) > 1e-12, 0.5 * (a - c) / den, 0.0)
+mix_11: acc 89.5% male_leak 10.5% female_loss - overlap_kept - events 87.0% rtf 0.96
+report: /home/user/vidvocals/eval/REPORT.md

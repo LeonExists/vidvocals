@@ -103,6 +103,18 @@ MODELS: dict[str, dict[str, Any]] = {
     },
 }
 
+# Decision parameters tuned on the dev half of the synthetic evaluation mixes (eval/tune.py,
+# eval/REPORT.md).  Keys: see voicefilter/decide.py DEFAULT_DECISION and decide.window_evidence.
+#  - the AudioSet tagger's "Female speech" vs "Male speech" scores are fused as a gender cue in
+#    every preset (it is run for the event kind anyway); it is reliable on non-verbal sounds and
+#    under separation artifacts where the trained head is not.
+#  - final_a / final_b: Platt calibration of the final segment logit (fit on dev).
+DECISION_TUNED: dict[str, Any] = {
+    "tagger_gender": True, "w_tagger_speech": 1.0, "w_tagger_nonverbal": 0.5, "w_tagger_mixed": 0.5,
+    "tagger_rel_floor": 1.0, "final_a": 1.45, "final_b": -0.33,
+}
+ACTIVITY_TUNED: dict[str, Any] = {"merge_gap": 0.10}
+
 PRESETS: dict[str, dict[str, Any]] = {
     "fast": {
         "name": "Fast",
@@ -116,6 +128,8 @@ PRESETS: dict[str, dict[str, Any]] = {
         "tagger": "tagger_dymn10",
         "overlap": "off",
         "cluster_threshold": 0.65,
+        "activity": dict(ACTIVITY_TUNED),
+        "decision": dict(DECISION_TUNED),
     },
     "balanced": {
         "name": "Balanced",
@@ -129,6 +143,8 @@ PRESETS: dict[str, dict[str, Any]] = {
         "tagger": "tagger_dymn10",
         "overlap": "flag",
         "cluster_threshold": 0.65,
+        "activity": dict(ACTIVITY_TUNED),
+        "decision": dict(DECISION_TUNED),
     },
     "best": {
         "name": "Best",

@@ -1,0 +1,14 @@
+mix_00: acc 81.3% male_leak 22.3% female_loss 11.8% overlap_kept 93.3% events 66.7% rtf 0.62
+mix_01: acc 75.8% male_leak 34.9% female_loss 0.0% overlap_kept 87.1% events 48.6% rtf 0.40
+mix_02: acc 91.0% male_leak 23.8% female_loss 0.7% overlap_kept 81.2% events 66.7% rtf 0.44
+mix_03: acc 89.7% male_leak 25.0% female_loss 3.1% overlap_kept 94.4% events 63.0% rtf 0.45
+mix_04: acc 99.8% male_leak - female_loss 0.2% overlap_kept - events 100.0% rtf 0.41
+mix_05: acc 69.4% male_leak 30.6% female_loss - overlap_kept - events 69.2% rtf 0.36
+mix_06: acc 91.1% male_leak 20.7% female_loss 1.8% overlap_kept 77.7% events 59.3% rtf 0.43
+mix_07: acc 84.0% male_leak 30.6% female_loss 5.6% overlap_kept 69.0% events 63.2% rtf 0.38
+mix_08: acc 78.8% male_leak 25.9% female_loss 17.8% overlap_kept 88.4% events 57.7% rtf 0.39
+mix_09: acc 76.8% male_leak 19.7% female_loss 31.2% overlap_kept 42.4% events 51.9% rtf 0.39
+mix_10: acc 95.9% male_leak - female_loss 4.1% overlap_kept - events 96.2% rtf 0.29
+mix_11: acc 86.7% male_leak 13.3% female_loss - overlap_kept - events 82.6% rtf 0.30
+report: /home/user/vidvocals/eval/REPORT.md
+ALLDONE
