@@ -149,6 +149,13 @@ def _mlp(dim_in, dim_out, dim_hidden, depth):
 
 
 class MaskEstimator(nn.Module):
+    """``depth`` = number of hidden layers of the per-band MLP.
+
+    Note: the BS-RoFormer and Mel-Band code bases interpret ``mask_estimator_depth``
+    differently (depth-1 vs depth hidden layers); :func:`build_and_load` reads the real
+    number from the checkpoint.
+    """
+
     def __init__(self, dim, dim_inputs: Sequence[int], depth, mlp_expansion_factor=4):
         super().__init__()
         hidden = dim * mlp_expansion_factor
@@ -361,6 +368,10 @@ def build_and_load(model_type: str, cfg: dict, ckpt_path: str) -> nn.Module:
     if int(cfg.get("linear_transformer_depth", 0) or 0) > 0:
         raise ValueError("linear_transformer_depth > 0 is not supported")
     cfg["final_norm"] = any(k.startswith("final_norm.") for k in sd)
+    pref = "mask_estimators.0.to_freqs.0.0."
+    n_lin = len({k[len(pref):].split(".")[0] for k in sd if k.startswith(pref) and k.endswith(".weight")})
+    if n_lin:
+        cfg["mask_estimator_depth"] = n_lin - 1
     model = build_from_config(model_type, cfg)
     own = model.state_dict()
     fixed = {}

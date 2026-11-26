@@ -108,6 +108,15 @@ export class Timeline {
   }
   fit() { this.viewStart = 0; this.viewDur = this.dur; this.draw(); this.opts.onView?.(); }
 
+  zoomToFit(start, end) {
+    const px = (end - start) * this.w / this.viewDur;
+    if (px >= 14 || this.viewDur <= 20) return;
+    this.viewDur = Math.max(this.minDur, Math.min(this.viewDur, 20, Math.max((end - start) * 6, 8)));
+    this.viewStart = (start + end) / 2 - this.viewDur / 2;
+    this.clampView();
+    this.draw();
+  }
+
   ensureVisible(start, end) {
     const vs = this.viewStart, ve = vs + this.viewDur;
     const margin = this.viewDur * 0.08;
@@ -249,6 +258,7 @@ export class Timeline {
     const [a, b] = this.visibleRange();
     const laneH = L.blockBottom - L.blockTop;
     let sel = null;
+    let lastMark = -1e9;
     for (let i = a; i < b; i++) {
       const s = this.segs[i];
       let x0 = this.tx(s.start), x1 = this.tx(s.end);
@@ -286,6 +296,13 @@ export class Timeline {
       // marker row: warning for low confidence, star for user override
       const my = L.markTop + 6;
       const cx = x0 + bw / 2;
+      const isSel = this.selectedId !== null && String(s.id) === this.selectedId;
+      // when zoomed out, skip markers that would overlap the previous one (stripes still show)
+      if (!(s.low_confidence || s.override) || (cx - lastMark < 14 && !isSel && !s.override)) {
+        if (isSel) sel = { x0, bw };
+        continue;
+      }
+      lastMark = cx;
       if (s.low_confidence && s.override) {
         drawWarn(ctx, cx + 6, my, 12, col);
         drawStar(ctx, cx - 7, my, 11, col);
@@ -294,7 +311,7 @@ export class Timeline {
       } else if (s.override) {
         drawStar(ctx, cx, my, 11, col);
       }
-      if (this.selectedId !== null && String(s.id) === this.selectedId) sel = { x0, bw };
+      if (isSel) sel = { x0, bw };
     }
     if (sel) {
       ctx.fillStyle = col.view;
@@ -464,7 +481,7 @@ export class Timeline {
     }
     const horizontal = Math.abs(dx) > Math.abs(dy);
     const fullyOut = this.viewDur >= this.dur - 1e-6;
-    if (!horizontal && (fullyOut || e.shiftKey === false && fullyOut)) return; // let the page scroll
+    if (!horizontal && fullyOut && !e.shiftKey) return; // let the page scroll
     e.preventDefault();
     this.lastUser = performance.now();
     const d = horizontal ? dx : dy;

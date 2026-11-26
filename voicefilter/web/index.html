@@ -136,7 +136,7 @@
       </div>
       <div class="rv-actions">
         <a class="btn" id="rv-download" hidden download><svg class="icon" aria-hidden="true"><use href="#i-download"/></svg><span class="hide-xs">Download</span></a>
-        <button class="btn primary" id="rv-export" type="button"><svg class="icon" aria-hidden="true"><use href="#i-export"/></svg><span>Export</span></button>
+        <button class="btn primary" id="rv-export" type="button"><svg class="icon" aria-hidden="true"><use href="#i-export"/></svg><span>Export</span><span class="hide-sm" id="rv-export-again" hidden>again</span></button>
       </div>
     </div>
 
@@ -149,7 +149,7 @@
 
     <div class="rv-layout" id="rv-layout" hidden>
       <div class="rv-main">
-        <div class="summary" id="summary" aria-live="polite"></div>
+        <div class="summary" id="summary"></div>
 
         <section class="card tl-card" aria-label="Timeline">
           <div class="tl-toolbar">
@@ -158,10 +158,10 @@
               <button type="button" role="radio" data-src="vocals" aria-checked="false">Vocals</button>
               <button type="button" role="radio" data-src="preview" aria-checked="true">Preview</button>
             </div>
-            <div class="zoom-btns">
-              <button type="button" class="icon-btn" id="zoom-out" aria-label="Zoom out"><svg class="icon" aria-hidden="true"><use href="#i-zoom-out"/></svg></button>
-              <button type="button" class="icon-btn" id="zoom-fit" aria-label="Show whole timeline"><svg class="icon" aria-hidden="true"><use href="#i-fit"/></svg></button>
-              <button type="button" class="icon-btn" id="zoom-in" aria-label="Zoom in"><svg class="icon" aria-hidden="true"><use href="#i-zoom-in"/></svg></button>
+            <div class="flag-nav" role="group" aria-label="Low-confidence segments">
+              <button type="button" class="icon-btn" id="flag-prev" aria-label="Previous flagged segment"><svg class="icon" aria-hidden="true"><use href="#i-prev"/></svg></button>
+              <span class="flag-count" id="flag-count"><svg class="icon" aria-hidden="true"><use href="#i-warn"/></svg><span></span><small>unsure</small></span>
+              <button type="button" class="icon-btn" id="flag-next" aria-label="Next flagged segment"><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
             </div>
           </div>
           <div class="tl-wrap">
@@ -172,10 +172,10 @@
           <div class="transport">
             <button type="button" class="icon-btn play" id="play-btn" aria-label="Play"><svg class="icon" aria-hidden="true"><use href="#i-play"/></svg></button>
             <span class="time" id="time-display">0:00.0 / 0:00.0</span>
-            <div class="flag-nav" role="group" aria-label="Low-confidence segments">
-              <button type="button" class="icon-btn" id="flag-prev" aria-label="Previous flagged segment"><svg class="icon" aria-hidden="true"><use href="#i-prev"/></svg></button>
-              <span class="flag-count" id="flag-count"><svg class="icon" aria-hidden="true"><use href="#i-warn"/></svg><span></span></span>
-              <button type="button" class="icon-btn" id="flag-next" aria-label="Next flagged segment"><svg class="icon" aria-hidden="true"><use href="#i-next"/></svg></button>
+            <div class="zoom-btns">
+              <button type="button" class="icon-btn" id="zoom-out" aria-label="Zoom out"><svg class="icon" aria-hidden="true"><use href="#i-zoom-out"/></svg></button>
+              <button type="button" class="icon-btn" id="zoom-fit" aria-label="Show whole timeline"><svg class="icon" aria-hidden="true"><use href="#i-fit"/></svg></button>
+              <button type="button" class="icon-btn" id="zoom-in" aria-label="Zoom in"><svg class="icon" aria-hidden="true"><use href="#i-zoom-in"/></svg></button>
             </div>
           </div>
           <ul class="legend" aria-label="Legend">

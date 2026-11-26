@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import atexit
 import math
 import random
 import shutil
@@ -20,6 +21,7 @@ import socket
 import tempfile
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import numpy as np
@@ -62,6 +64,7 @@ RENDER_STAGES = [
 state: dict = {"speed": 1.0, "device": "cuda", "port": 8799}
 JOBS: dict[str, dict] = {}
 TMP = Path(tempfile.mkdtemp(prefix="vf-mock-"))
+atexit.register(shutil.rmtree, TMP, True)
 gpu_lock = asyncio.Lock()
 
 
@@ -257,7 +260,17 @@ async def export(job: dict):
 
 
 # ---------------------------------------------------------------- API
-app = FastAPI(title="Voice Filter mock API")
+@asynccontextmanager
+async def lifespan(_app):
+    yield
+    # uvicorn re-raises SIGINT/SIGTERM after shutdown, so atexit/finally may not run: clean up here
+    for job in JOBS.values():
+        if job.get("task"):
+            job["task"].cancel()
+    shutil.rmtree(TMP, ignore_errors=True)
+
+
+app = FastAPI(title="Voice Filter mock API", lifespan=lifespan)
 
 
 def get_job(job_id: str) -> dict:

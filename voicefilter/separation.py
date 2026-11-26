@@ -60,15 +60,6 @@ def _yaml_load(path: str) -> dict:
         return yaml.load(f, Loader=_Loader) or {}
 
 
-def hf_file(repo: str, filename: str, revision: Optional[str] = None,
-            local_only: bool = False) -> str:
-    """Path of a file from the Hugging Face hub (cached in MODELS/hf)."""
-    from huggingface_hub import hf_hub_download
-
-    return hf_hub_download(repo_id=repo, filename=filename, revision=revision,
-                           local_files_only=local_only)
-
-
 def _window(chunk: int, fade: int) -> np.ndarray:
     w = np.ones(chunk, dtype=np.float32)
     if fade > 0:
@@ -147,13 +138,13 @@ class RoformerBackend(TorchBackend):
         self.target_index = 0
 
     def _paths(self, local_only=False):
-        repo = self.spec["repo"]
-        ckpt = hf_file(repo, self.spec["ckpt"], self.spec.get("revision"), local_only)
-        cfg = self.spec.get("model_config")
+        from . import modelstore
+
+        key = self.spec.get("id", self.spec["type"])
+        ckpt = modelstore.resolve(key, self.spec["ckpt"], download=not local_only)
         cfg_path = None
-        if not cfg:
-            cfg_path = hf_file(self.spec.get("config_repo", repo), self.spec["config"],
-                               self.spec.get("revision"), local_only)
+        if not self.spec.get("model_config"):
+            cfg_path = modelstore.resolve(key, self.spec["config"], download=not local_only)
         return ckpt, cfg_path
 
     def download(self):
@@ -170,7 +161,8 @@ class RoformerBackend(TorchBackend):
         from . import roformer
 
         ckpt, cfg_path = self._paths(local_only=False)
-        full = {"model": dict(self.spec["model_config"])} if cfg_path is None else _yaml_load(cfg_path)
+        full = ({"model": dict(self.spec["model_config"])} if cfg_path is None
+                else _yaml_load(cfg_path))
         mcfg = dict(full.get("model", {}))
         audio = full.get("audio", {}) or {}
         tr = full.get("training", {}) or {}
@@ -234,11 +226,38 @@ class DemucsBackend(TorchBackend):
         return out[:, self.sources.index("vocals")]
 
 
+class TorchaudioHDemucsBackend(TorchBackend):
+    """torchaudio Hybrid Demucs (HDEMUCS_HIGH_MUSDB_PLUS; weights from download.pytorch.org)."""
+
+    def load(self):
+        import torchaudio.pipelines as tp
+
+        bundle = getattr(tp, self.spec.get("bundle", "HDEMUCS_HIGH_MUSDB_PLUS"))
+        self.model = bundle.get_model().eval().to(self.device)
+        self.sources = list(getattr(self.model, "sources", ["drums", "bass", "other", "vocals"]))
+        self.chunk = int(float(self.spec.get("chunk_seconds", 10.0)) * SR)
+        self.num_overlap = int(self.spec.get("num_overlap", 2))
+        self.batch_size = int(self.spec.get("batch_size") or (2 if self.device == "cuda" else 1))
+
+    def is_present(self):
+        from . import modelstore
+
+        return modelstore.torchaudio_present(self.spec.get("bundle", "HDEMUCS_HIGH_MUSDB_PLUS"))
+
+    def _forward(self, t):
+        ref = t.mean(1, keepdim=True)
+        mu = ref.mean(-1, keepdim=True)
+        sd = ref.std(-1, keepdim=True).clamp(min=1e-5)
+        y = self.model((t - mu) / sd)
+        return y[:, self.sources.index("vocals")] * sd
+
+
 BACKENDS = {
     "passthrough": PassthroughBackend,
     "mel_band_roformer": RoformerBackend,
     "bs_roformer": RoformerBackend,
     "demucs": DemucsBackend,
+    "torchaudio_hdemucs": TorchaudioHDemucsBackend,
 }
 
 
@@ -468,6 +487,8 @@ def spec_present(spec: dict) -> bool:
         return all(spec_present(m) for m in spec["members"])
     if t in ("mel_band_roformer", "bs_roformer"):
         return RoformerBackend(spec).is_present()
+    if t == "torchaudio_hdemucs":
+        return TorchaudioHDemucsBackend(spec).is_present()
     if t == "demucs":
         if spec.get("repo"):
             try:
@@ -489,6 +510,10 @@ def spec_download(spec: dict) -> None:
             spec_download(m)
     elif t in ("mel_band_roformer", "bs_roformer"):
         RoformerBackend(spec).download()
+    elif t == "torchaudio_hdemucs":
+        import torchaudio.pipelines as tp
+
+        getattr(tp, spec.get("bundle", "HDEMUCS_HIGH_MUSDB_PLUS")).get_model()
     elif t == "demucs" and spec.get("repo"):
         from huggingface_hub import snapshot_download
 
