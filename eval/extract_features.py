@@ -34,7 +34,7 @@ ITEMS_CSV = CACHE_DIR / "items.csv"
 MAX_FULL = 3.0
 CROP_MIN, CROP_MAX = 0.25, 1.5
 PER_SPEAKER = {  # (train, test) clips per speaker, by source
-    "librispeech": (5, 4), "crowd": (4, 4), "crema": (5, 4), "audiomnist": (5, 6), "deeply": (99, 99),
+    "librispeech": (3, 3), "crowd": (2, 3), "crema": (3, 3), "audiomnist": (2, 3), "deeply": (99, 99),
 }
 NONPHONATED = {"teeth-chattering", "teeth-grinding", "tongue-clicking", "lip-popping", "lip-smacking",
                "nose-blowing"}
@@ -127,12 +127,16 @@ def run_shard(shard: int, nshards: int, use_wavlm: bool, use_ecapa: bool = True)
         import torchaudio
         wavlm = torchaudio.pipelines.WAVLM_BASE_PLUS.get_model().eval()
     res = defaultdict(list)
+    produce = {"item_id", "start", "dur", "hand"} | ({"ecapa"} if use_ecapa else set()) | (
+        {"wavlm"} if use_wavlm else set())
+    if done and not produce <= set(prev):
+        done = {}
     t0 = time.time()
     audio_cache: dict[str, np.ndarray] = {}
     for i, it in enumerate(mine):
         if it["item_id"] in done:
             j = done[it["item_id"]]
-            for k in prev:
+            for k in produce:
                 res[k].append(prev[k][j])
             continue
         p = it["path"]
@@ -179,6 +183,9 @@ def merge() -> Path:
         for k in z.files:
             acc[k].append(z[k])
     arrays = {k: np.concatenate(acc[k]) for k in keys}
+    _, first = np.unique(arrays["item_id"], return_index=True)   # drop duplicates across shards
+    first = np.sort(first)
+    arrays = {k: v[first] for k, v in arrays.items()}
     out = FEAT_DIR / "all.npz"
     np.savez(str(out), **arrays)
     print("merged", {k: v.shape for k, v in arrays.items()}, "->", out)

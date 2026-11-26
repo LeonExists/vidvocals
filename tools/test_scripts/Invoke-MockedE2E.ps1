@@ -126,7 +126,7 @@ function Invoke-Mocked([string]$ScriptName, [string]$ArgsJson, [string]$Answers,
     if (-not $m.Success) { Write-Host $text; return -999 }
     return [int]$m.Groups[1].Value
 }
-function Read-Json([string]$p) { return ([System.IO.File]::ReadAllText($p) | ConvertFrom-Json) }
+function Read-Json([string]$p) { if (-not (Test-Path -LiteralPath $p)) { Assert-True $false "missing $p"; return $null }; return ([System.IO.File]::ReadAllText($p) | ConvertFrom-Json) }
 
 # ---- S1: fresh install, portable ffmpeg (primary URL fails), Public network, -Yes
 $env:PATH = (Join-Path $fx 'bin') + ':' + $basePath
@@ -165,7 +165,7 @@ Assert-True ($uvCalls -match 'venv --python 3\.12 --managed-python --no-project'
 Assert-True ($uvCalls -match 'pip install --python .*python\.exe -r .*requirements\.txt -c .*torch-constraints\.txt') 'S1 requirements installed with constraints'
 Assert-True ($uvCalls -notmatch '--index') 'S1 torch already matching cu132 -> not reinstalled'
 $cons = [System.IO.File]::ReadAllText((Join-Path $app 'runtime/torch-constraints.txt'))
-Assert-True ($cons -match 'torch==\S+\+cu132' -and $cons -match 'torchaudio==\S+\+cu132') 'S1 constraints pin torch + torchaudio'
+Assert-True ($cons -match '(?m)^torch==\S+' -and $cons -match '(?m)^torchaudio==\S+') 'S1 constraints pin torch + torchaudio'
 $snap = Read-Json (Join-Path $app 'data/env-snapshot.json')
 Assert-Equal (Join-Path $app 'models/hf') $snap.HF_HOME 'S1 model download HF_HOME inside app'
 Assert-Equal (Join-Path $app 'data/tmp') $snap.TEMP 'S1 model download TEMP inside app'
@@ -201,7 +201,8 @@ Assert-Equal 9000 $cfg.port 'S2 config port'
 Assert-Equal (Join-Path $fx 'pathffmpeg/ffmpeg.exe') $cfg.ffmpeg 'S2 config uses PATH ffmpeg'
 $batText = [System.IO.File]::ReadAllText((Join-Path $app 'start.bat'))
 Assert-True ($batText.Contains('set "VF_PORT=9000"')) 'S2 start.bat port updated'
-Assert-True ($batText.Contains('rem VF_FFMPEG: path contains non-ASCII')) 'S2 start.bat leaves the non-ASCII ffmpeg path to config.json'
+Assert-True ($batText.Contains('set "VF_FFMPEG=' + (Join-Path $fx 'pathffmpeg/ffmpeg.exe') + '"')) 'S2 start.bat uses the PATH ffmpeg'
+Assert-True (-not $batText.Contains('runtime\ffmpeg\bin;')) 'S2 start.bat no longer prepends the portable ffmpeg'
 Assert-True (@(Get-ChildItem -LiteralPath (Join-Path $app 'data/logs') -Filter 'install-*.log').Count -ge 1) 'S2 log written'
 $uvCalls = [System.IO.File]::ReadAllText($uvLog)
 Assert-Equal 1 ([regex]::Matches($uvCalls, '(?m)^venv ').Count) 'S2 reused the existing .venv'

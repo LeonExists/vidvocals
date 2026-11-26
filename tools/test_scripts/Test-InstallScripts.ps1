@@ -7,11 +7,11 @@
     catches syntax errors, PowerShell-7-only syntax, StrictMode mistakes, quoting bugs and
     install/uninstall asymmetries.
 
-      pwsh -NoProfile -File tools/test_scripts/Test-InstallScripts.ps1 [-SkipE2E]
+      pwsh -NoProfile -File tools/test_scripts/Test-InstallScripts.ps1 [-SkipE2E] [-KeepTemp]
 
     Exit code 0 = all checks passed.
 #>
-param([switch]$SkipE2E)
+param([switch]$SkipE2E, [switch]$KeepTemp)
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
@@ -122,6 +122,7 @@ foreach ($name in @('install.ps1', 'uninstall.ps1')) {
     foreach ($v in $vars) {
         $vn = $v.VariablePath.UserPath
         Assert-True (-not ($ps7OnlyVariables -contains $vn)) "$name line $($v.Extent.StartLineNumber): PS6+ variable `$$vn"
+        Assert-True (-not ($vn.Contains('?'))) "$name line $($v.Extent.StartLineNumber): variable name `$$vn contains '?' (write `${name}? in strings)"
     }
     # Every script parameter is used.
     $paramNames = @($ast.ParamBlock.Parameters | ForEach-Object { $_.Name.VariablePath.UserPath })
@@ -297,7 +298,7 @@ $null = New-Item -ItemType Directory -Path $tmpRoot -Force
 
     # Set-ProcessEnvironment
     Set-ProcessEnvironment -EnvList $envList -AppDir $app
-    Assert-Equal ([System.IO.Path]::Combine($app, 'models\hf')) $env:HF_HOME 'process HF_HOME'
+    Assert-Equal ([System.IO.Path]::Combine($app, 'models', 'hf')) $env:HF_HOME 'process HF_HOME'
     Assert-Equal $app $env:VF_APP_DIR 'process VF_APP_DIR'
 
     # Elevated helper script
@@ -387,7 +388,7 @@ if (-not $SkipE2E) {
     . (Join-Path $PSScriptRoot 'Invoke-MockedE2E.ps1') -TmpRoot $tmpRoot
 }
 
-Remove-Item -LiteralPath $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue
+if ($KeepTemp) { Write-Host "Test files kept in $tmpRoot" } else { Remove-Item -LiteralPath $tmpRoot -Recurse -Force -ErrorAction SilentlyContinue }
 Write-Host ''
 if ($script:Failures.Count -gt 0) {
     Write-Host "$($script:Failures.Count) check(s) FAILED, $($script:Passed) passed." -ForegroundColor Red

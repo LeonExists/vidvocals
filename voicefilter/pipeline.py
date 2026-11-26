@@ -436,7 +436,7 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
                 p = r["p_female"]
                 conf = r["confidence"]
                 replacements.append({"start": r["start"], "end": r["end"], "wav": r["replacement"],
-                                     "segment": f"seg{i + 1}"})
+                                     "segment": i + 1})
             elif r and r.get("decision") in ("keep", "remove"):
                 keep = r["decision"] == "keep"
                 p, conf = r["p_female"], r["confidence"]
@@ -444,7 +444,7 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
                 keep = {"keep": True, "remove": False}.get(policy, p >= 0.5)
                 conf = min(conf, 0.5)  # an unresolved overlap is never "confident"
         out_segs.append({
-            "id": f"seg{i + 1}", "start": round(s["start"], 3), "end": round(s["end"], 3),
+            "id": i + 1, "start": round(s["start"], 3), "end": round(s["end"], 3),
             "speaker": spk.id if spk else "S1", "kind": seg_kind[i], "label": label,
             "p_female": round(p, 4), "confidence": round(conf, 4), "low_confidence": bool(conf < thr),
             "keep": bool(keep), "override": None,
@@ -575,7 +575,7 @@ def _replacements(work: Path, keep_ids: set[str]) -> list[dict]:
     reps = _read_json(work / "replacements.json", []) or []
     out = []
     for r in reps:
-        if r.get("segment") not in keep_ids:
+        if str(r.get("segment")) not in {str(k) for k in keep_ids}:
             continue
         p = Path(r["wav"])
         if not p.is_absolute():

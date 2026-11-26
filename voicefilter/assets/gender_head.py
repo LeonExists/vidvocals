@@ -52,14 +52,27 @@ def _to_16k_mono(wav: np.ndarray, sr: int) -> np.ndarray:
     return np.ascontiguousarray(y, dtype=np.float32)
 
 
+HIGHPASS_HZ = 60.0
+
+
 def pitch_track(y16: np.ndarray):
-    """pyin F0 track (Hz, nan when unvoiced), voiced flag, voiced prob; 10 ms hop."""
+    """pyin F0 track (Hz, nan when unvoiced), voiced flag, voiced prob; 10 ms hop.
+
+    The signal is high-passed at 60 Hz (zero-phase) first: low-frequency rumble/hum otherwise
+    makes pyin lock onto sub-harmonics at the 60 Hz search bound (seen on phone/crowd recordings).
+    Frames whose F0 sits on the lower bound (<= 1.03 * F0_MIN) are treated as unvoiced.
+    """
     import librosa
+    from scipy.signal import butter, sosfiltfilt
     if len(y16) < FRAME:
         y16 = np.pad(y16, (0, FRAME - len(y16)))
+    if len(y16) > 64:
+        sos = butter(4, HIGHPASS_HZ, "highpass", fs=SR, output="sos")
+        y16 = sosfiltfilt(sos, y16).astype(np.float32)
     f0, vflag, vprob = librosa.pyin(y16, fmin=F0_MIN, fmax=F0_MAX, sr=SR, frame_length=FRAME,
                                     hop_length=HOP, center=True)
-    return f0, vflag.astype(bool), np.nan_to_num(vprob)
+    vflag = vflag.astype(bool) & np.isfinite(f0) & (np.nan_to_num(f0) > 1.03 * F0_MIN)
+    return f0, vflag, np.nan_to_num(vprob)
 
 
 def handcrafted_features(wav: np.ndarray, sr: int = SR) -> np.ndarray:

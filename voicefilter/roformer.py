@@ -26,7 +26,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-DEFAULT_FREQS_PER_BANDS = ((2,) * 24 + (4,) * 12 + (12,) * 8 + (12,) * 8 + (24,) * 8
+DEFAULT_FREQS_PER_BANDS = ((2,) * 24 + (4,) * 12 + (12,) * 8 + (24,) * 8
                            + (48,) * 8 + (128, 129))
 
 

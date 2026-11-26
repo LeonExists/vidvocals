@@ -82,15 +82,16 @@ class Pools:
         path = CACHE_DIR / "speaker_f0.json"
         if path.exists():
             return json.loads(path.read_text())
-        import librosa
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+        from voicefilter.assets.gender_head import pitch_track
         out = {}
         for g in ("F", "M"):
             for spk, rows in sorted(self.speech[g].items()):
                 f0s = []
-                for r in sorted(rows, key=lambda r: r["clip_id"])[:2]:
-                    y = load_audio(DATA_DIR / r["path"], sr=16000)[: 16000 * 6]
-                    f0, vf, _ = librosa.pyin(y, fmin=60, fmax=600, sr=16000, frame_length=1024, hop_length=320)
-                    f0s += list(f0[vf & np.isfinite(f0)])
+                for r in sorted(rows, key=lambda r: r["clip_id"])[:3]:
+                    y = load_audio(DATA_DIR / r["path"], sr=16000)[: 16000 * 5]
+                    f0, vf, _ = pitch_track(y)
+                    f0s += list(f0[vf])
                 out[spk] = float(np.median(f0s)) if f0s else float("nan")
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(out, indent=1))
@@ -180,7 +181,7 @@ def background(kind: str, n: int, rng: np.random.Generator, prng: random.Random)
         tracks = sorted(p for p in (RAW_DIR / "music").glob("*.ogg")
                         if (VOCAL_MUSIC in p.stem) == (kind == "music_vocals") and "trumpet" not in p.stem)
         pieces, used, total = [], [], 0
-        while total < n + SR:
+        while total < n + 2 * SR:
             p = prng.choice(tracks)
             y = load_audio(p, sr=SR, mono=False)
             if y.shape[0] == 1:
@@ -189,7 +190,7 @@ def background(kind: str, n: int, rng: np.random.Generator, prng: random.Random)
             y = y[:, s:]
             pieces.append(y)
             used.append(p.stem)
-            total += y.shape[1]
+            total += y.shape[1] - SR
         bed = crossfade_concat(pieces, SR)[:, :n]
         info = {"type": kind, "tracks": used}
     elif kind == "esc_noise":
@@ -199,11 +200,11 @@ def background(kind: str, n: int, rng: np.random.Generator, prng: random.Random)
         cats = prng.sample(ESC_NOISE, 3)
         files = sorted(r["filename"] for r in meta if r["category"] in cats and r["filename"] in have)
         pieces, total = [], 0
-        while total < n + SR:
+        while total < n + 2 * SR:
             y = load_audio(RAW_DIR / "esc50" / "audio" / prng.choice(files), sr=SR)
             y = rms_norm(y, -30)
             pieces.append(np.stack([y, np.roll(y, 300)]))
-            total += len(y)
+            total += len(y) - SR // 2
         bed = crossfade_concat(pieces, SR // 2)[:, :n]
         floor = np.stack([pink_noise(rng, n), pink_noise(rng, n)]) * 10 ** (-45 / 20)
         bed = bed + floor
@@ -234,7 +235,10 @@ def pick_nv(pools: Pools, gender: str, prng: random.Random, used: set, breathy: 
 
 
 def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, duration: float | None = None,
-                n_speakers: int | None = None, composition: str | None = None, video: bool = True) -> dict:
+                n_speakers: int | None = None, composition: str | None = None, video: bool = True,
+                script: list | None = None, bg_kind: str | None = None) -> dict:
+    """Random scene; `script` = [(speaker_index, "speech"|"nv"|"short", start_s, max_len_s), ...]
+    replaces the random timeline (used for the smoke mix)."""
     prng = random.Random(seed * 1000 + idx)
     rng = np.random.default_rng(seed * 1000 + idx)
     T = duration or prng.uniform(60, 120)
@@ -263,7 +267,7 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
         speakers.append({"id": f"S{k + 1}", "gender": g, "source_speaker": spk, "f0_median": f0.get(spk),
                          "gain_db": prng.uniform(-4, 4), "pan": prng.uniform(-0.5, 0.5),
                          "clips": sorted(pools.speech[g][spk], key=lambda r: r["clip_id"])})
-    reverb = idx % 3 == 1 or prng.random() < 0.2
+    reverb = idx % 3 == 1 and not script
     rirs = {s["id"]: synth_rir(rng, prng.uniform(0.3, 0.9)) for s in speakers} if reverb else {}
     wet = prng.uniform(0.25, 0.5) if reverb else 0.0
 
@@ -272,40 +276,50 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
     t = prng.uniform(0.5, 2.0)
     last = None
     speech_turn = defaultdict(int)
-    p_ovl = 0.28 if comp == "mixed" else 0.1
+    p_ovl = 0.55
+    forced = None
+    script = list(script or [])
+    scripted = bool(script)
+    max_len = None
     while t < T - 1.0:
-        if last is not None and prng.random() < 0.75 and len(speakers) > 1:
+        if scripted:
+            if not script:
+                break
+            si, stype, t, max_len = script.pop(0)
+            spk = speakers[si]
+        elif forced is not None:
+            spk, forced = forced, None
+        elif last is not None and prng.random() < 0.75 and len(speakers) > 1:
             spk = prng.choice([s for s in speakers if s["id"] != last["id"]])
         else:
             spk = prng.choice(speakers)
         g = spk["gender"]
         r = prng.random()
-        burst = 1
-        if r < 0.08:  # very short event
-            if prng.random() < 0.5 and pools.digits[g]:
+        if scripted:
+            r = {"short": 0.0, "nv": 0.3, "speech": 0.9}[stype]
+        if r < 0.1:  # very short event (<0.4 s)
+            if not scripted and prng.random() < 0.5 and pools.digits[g]:
                 row = prng.choice(pools.digits[g])
                 y = trim(pools.audio(row))
                 kind, cat = "speech", "short_digit"
-                src = row
             else:
                 row = pick_nv(pools, g, prng, used_nv)
                 y = trim(pools.audio(row))
-                kind, cat, src = "nonverbal", f"short_{row['category']}", row
+                kind, cat = "nonverbal", f"short_{row['category']}"
             L = int(prng.uniform(0.15, 0.4) * SR)
             if len(y) > L:
                 env = np.convolve(y ** 2, np.ones(441), "same")
                 c = int(np.argmax(env))
                 s0 = int(np.clip(c - L // 2, 0, len(y) - L))
                 y = y[s0:s0 + L]
-            fade = min(len(y) // 4, int(0.01 * SR))
             y = y.copy()
+            fade = max(1, min(len(y) // 4, int(0.01 * SR)))
             y[:fade] *= np.linspace(0, 1, fade)
             y[-fade:] *= np.linspace(1, 0, fade)
-            clips = [(y, kind, cat, src)]
-        elif r < 0.45:
-            burst = prng.choice([1, 1, 2, 3])
+            clips = [(y, kind, cat, row)]
+        elif r < 0.45:  # non-verbal burst: 1-3 sounds from the same speaker
             clips = []
-            for _ in range(burst):
+            for _ in range(1 if scripted else prng.choice([1, 1, 2, 3])):
                 row = pick_nv(pools, g, prng, used_nv, breathy=prng.random() < 0.25)
                 y = trim(pools.audio(row))[: int(6 * SR)]
                 clips.append((y, "nonverbal", row["category"], row))
@@ -315,60 +329,48 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
             y = trim(pools.audio(row))[: int(8 * SR)]
             clips = [(y, "speech", row["category"], row)]
         start = t
-        for j, (y, kind, cat, src) in enumerate(clips):
-            y = rms_norm(y) * 10 ** ((spk["gain_db"] + prng.uniform(-6, 3)) / 20)
+        n_before = len(events)
+        for y, kind, cat, src in clips:
+            if max_len:
+                y = y[: int(max_len * SR)]
             if start + len(y) / SR > T - 0.2:
                 break
+            y = rms_norm(y) * 10 ** ((spk["gain_db"] + prng.uniform(-6, 3)) / 20)
             s0 = int(start * SR)
             pan = spk["pan"]
-            st = np.stack([y * np.sqrt((1 - pan) / 2) * np.sqrt(2), y * np.sqrt((1 + pan) / 2) * np.sqrt(2)])
+            st = np.stack([y * np.sqrt(1 - pan), y * np.sqrt(1 + pan)])
             if reverb:
                 from scipy.signal import fftconvolve
                 h = rirs[spk["id"]]
-                wetsig = np.stack([fftconvolve(st[c], h[c])[: st.shape[1] + h.shape[1] - 1] for c in range(2)])
+                wetsig = np.stack([fftconvolve(st[c], h[c]) for c in range(2)])
                 st = np.pad(st, ((0, 0), (0, wetsig.shape[1] - st.shape[1]))) * (1 - wet) + wetsig * wet * 1.5
             e = min(n, s0 + st.shape[1])
             stems[g][:, s0:e] += st[:, : e - s0]
-            act = [[start + a, start + b] for a, b in active_intervals(y)]
+            act = [[start + a0, start + b0] for a0, b0 in active_intervals(y)]
             events.append({"start": round(start, 3), "end": round(start + len(y) / SR, 3), "speaker": spk["id"],
                            "gender": g, "kind": kind, "category": cat, "overlap": False,
-                           "active": [[round(a, 3), round(b, 3)] for a, b in act],
+                           "active": [[round(a0, 3), round(b0, 3)] for a0, b0 in act],
                            "source_clip": src["clip_id"], "source_speaker": src["speaker"],
                            "short": len(y) / SR < 0.4, "breathy": cat in BREATHY})
             start = start + len(y) / SR + prng.uniform(0.1, 0.6)
-        end = events[-1]["end"] if events else t + 0.5
+        if len(events) == n_before and not scripted:  # nothing fitted before the end
+            break
+        if scripted:
+            continue
         last = spk
-        if prng.random() < p_ovl and events:
-            # next event of (preferably) the other gender starts before this one ends
-            cur = events[-1]
+        cur = events[-1]
+        others = [s for s in speakers if s["gender"] != g]
+        if others and prng.random() < p_ovl:
+            # next event comes from the other gender and starts before this one ends
             ln = cur["end"] - cur["start"]
-            t = max(cur["start"] + 0.2, cur["end"] - prng.uniform(0.4, min(2.0, max(0.5, ln))))
-            others = [s for s in speakers if s["gender"] != g] or [s for s in speakers if s["id"] != spk["id"]]
-            if others:
-                last = {"id": "__force__"}
-                forced = prng.choice(others)
-                speakers_sorted = forced
-                # put forced speaker first by temporarily making it the only candidate
-                spk_backup = speakers
-                speakers = [forced]
-                # one event for the forced speaker
-                t_before = t
-                # emulate one loop iteration inline (recursion-free): reuse loop by continuing
-                speakers_for_next = spk_backup
-                _forced_state = (speakers_for_next,)
-            else:
-                t = end + prng.uniform(0.15, 1.2)
+            t = max(cur["start"] + 0.2, cur["end"] - prng.uniform(0.6, min(2.5, max(0.7, ln))))
+            forced = prng.choice(others)
         else:
             gap = prng.uniform(0.15, 1.2) if prng.random() > 0.1 else prng.uniform(2.0, 4.0)
-            t = end + gap
-        if "_forced_state" in locals() and speakers != locals()["_forced_state"][0] and len(speakers) == 1 \
-                and last == {"id": "__force__"}:
-            pass  # forced speaker used on next iteration
-        elif "_forced_state" in locals():
-            speakers = locals()["_forced_state"][0]
-            del _forced_state
-    if "_forced_state" in locals():
-        speakers = locals()["_forced_state"][0]
+            t = max(e["end"] for e in events) + gap
+        # never start inside the stretch already used by the same speaker
+        t = max(t, max((e["end"] for e in events if forced is not None and e["speaker"] == forced["id"]),
+                       default=0.0))
 
     # overlap flags (male+female simultaneously)
     for e in events:
@@ -378,8 +380,8 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
             if min(e["end"], o["end"]) - max(e["start"], o["start"]) > 0.05:
                 e["overlap"] = True
                 break
-    bg_kind = {0: "music", 1: "esc_noise", 2: "synthetic"}[idx % 3]
-    if idx % 12 == 11:
+    bg_kind = bg_kind or {0: "music", 1: "esc_noise", 2: "synthetic"}[idx % 3]
+    if idx % 12 == 11 and not scripted:
         bg_kind = "music_vocals"
         hard.append("background_with_sung_vocals")
     bed, bg_info = background(bg_kind, n, rng, prng)
@@ -406,7 +408,7 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
     fm = _frame_classes(events, T)
     vocal_frames = (fm > 0).sum()
     truth = {"name": out_dir.name, "duration": round(n / SR, 6), "sr": SR, "events": events,
-             "speakers": [{k: v for k, v in s.items() if k != "clips"} for s in speakers_all(speakers, events)],
+             "speakers": [{k: v for k, v in s.items() if k != "clips"} for s in speakers],
              "meta": {"seed": seed, "index": idx, "composition": comp, "n_speakers": ns, "background": bg_info,
                       "snr_db": round(snr, 2), "reverb": reverb, "wet": round(wet, 3), "hard_cases": hard,
                       "female_active_s": round(dur_f, 2), "male_active_s": round(dur_m, 2),
@@ -418,10 +420,6 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
     if video:
         make_video(out_dir / "mix.wav", out_dir / "mix.mp4", n / SR)
     return truth
-
-
-def speakers_all(speakers, events):
-    return speakers
 
 
 def _frame_classes(events, T, hop=0.01):
@@ -450,7 +448,9 @@ def make_video(wav: Path, mp4: Path, dur: float) -> None:
 
 def build_smoke(pools: Pools, out_dir: Path, video: bool = True) -> dict:
     """10 s mix: female speech, overlapping male non-verbal, short female NV, male speech."""
-    return build_scene(0, 99, pools, {}, out_dir, duration=10.0, n_speakers=2, composition="mixed", video=video)
+    script = [(0, "speech", 0.5, 3.2), (1, "nv", 3.0, 2.0), (0, "short", 5.6, None), (1, "speech", 6.5, 3.0)]
+    return build_scene(0, 99, pools, {}, out_dir, duration=10.0, n_speakers=2, composition="mixed", video=video,
+                       script=script, bg_kind="esc_noise")
 
 
 def main() -> None:

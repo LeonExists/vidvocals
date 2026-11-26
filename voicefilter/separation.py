@@ -384,7 +384,7 @@ def separate_file(mix_wav: str | Path, vocals_wav: str | Path, background_wav: s
                     nxt = k * step if k < n_chunks else acc_start + acc.shape[1]
                     flush(nxt)
                     if progress:
-                        progress(min(1.0, k / n_chunks), f"separating {k}/{n_chunks}")
+                        progress(min(1.0, k / n_chunks), f"Separating vocals ({100 * k // n_chunks}%)")
                 if written < n:  # numerical safety: pad with silence vocals
                     rest = n - written
                     mix = mix_rd.get(written, rest)

@@ -93,6 +93,7 @@ $script:State = @{
     TorchTag         = $null
     TorchVersion     = $null
     TorchAudioVersion = $null
+    TorchMeta        = $null
     CudaAvailable    = $false
     GpuName          = $null
     Device           = 'cpu'
@@ -545,7 +546,7 @@ function Set-ProcessEnvironment {
     [Environment]::SetEnvironmentVariable('VF_APP_DIR', $AppDir, 'Process')
     foreach ($e in $EnvList) {
         $v = $e.Value
-        if ($null -ne $e.Rel) { $v = [System.IO.Path]::Combine($AppDir, $e.Rel) }
+        if ($null -ne $e.Rel) { $v = [System.IO.Path]::Combine($AppDir, $e.Rel.Replace('\', [System.IO.Path]::DirectorySeparatorChar)) }
         [Environment]::SetEnvironmentVariable($e.Name, $v, 'Process')
     }
     foreach ($n in @('PYTHONPATH', 'PYTHONHOME', 'PYTHONSTARTUP', 'VIRTUAL_ENV', 'CONDA_PREFIX')) {
@@ -600,7 +601,7 @@ function New-StartBatText {
     $L.Add(':failed')
     $L.Add('echo.')
     $L.Add('echo Voice Filter stopped with error code %VF_EXIT%. See the messages above.')
-    $L.Add('echo Logs: %VF_APP_DIR%\data\logs')
+    $L.Add('echo Logs: "%VF_APP_DIR%\data\logs"')
     $L.Add('pause')
     $L.Add('exit /b %VF_EXIT%')
     $L.Add(':notinstalled')
@@ -641,9 +642,11 @@ function New-StartPs1Text {
     $L.Add('foreach ($d in @(''data\tmp'', ''data\cache'', ''data\logs'')) { $null = New-Item -ItemType Directory -Force -Path (Join-Path $AppDir $d) }')
     $L.Add('Set-Location -LiteralPath $AppDir')
     $L.Add('if (-not $NoBrowser) {')
-    $L.Add(('    $poll = {0}' -f (ConvertTo-PsLiteral (("`$u='http://localhost:{0}/'; `$t='http://127.0.0.1:{0}/api/info'; " +
-             "for(`$i=0;`$i -lt 180;`$i++){{try{{`$null=Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 -Uri `$t; Start-Process `$u; break}}catch{{Start-Sleep -Milliseconds 700}}}}") -f $PortNumber))))
-    $L.Add('    Start-Process -FilePath ''powershell.exe'' -WindowStyle Hidden -ArgumentList @(''-NoProfile'', ''-ExecutionPolicy'', ''Bypass'', ''-Command'', $poll)')
+    $poll = ("`$u='http://localhost:{0}/'; `$t='http://127.0.0.1:{0}/api/info'; " +
+             "for(`$i=0;`$i -lt 180;`$i++){{try{{`$null=Invoke-WebRequest -UseBasicParsing -TimeoutSec 2 -Uri `$t; Start-Process `$u; break}}catch{{Start-Sleep -Milliseconds 700}}}}") -f $PortNumber
+    $encodedPoll = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($poll))
+    $L.Add('    # Opens the browser as soon as the server answers (hidden helper window).')
+    $L.Add(('    Start-Process -FilePath ''powershell.exe'' -WindowStyle Hidden -ArgumentList ''-NoProfile -ExecutionPolicy Bypass -EncodedCommand {0}''' -f $encodedPoll))
     $L.Add('}')
     $L.Add(('Write-Host ''Starting Voice Filter on port {0} ... (press Ctrl+C to stop)''' -f $PortNumber))
     $L.Add('& $py -m voicefilter')
@@ -711,10 +714,11 @@ function New-ElevatedScriptText {
     $L.Add("`$ErrorActionPreference = 'Stop'")
     $L.Add('$res = [ordered]@{ rule_ok = $null; rule_error = $null; profiles = @() }')
     $L.Add('try {')
-    $L.Add("    foreach (`$pat in @($patterns)) {")
-    $L.Add('        Get-NetFirewallRule -DisplayName $pat -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction Stop')
-    $L.Add('    }')
     if ($CreateRule) {
+        # Remove-and-recreate, so a changed port or edited rule is replaced.
+        $L.Add("    foreach (`$pat in @($patterns)) {")
+        $L.Add('        Get-NetFirewallRule -DisplayName $pat -ErrorAction SilentlyContinue | Remove-NetFirewallRule -ErrorAction Stop')
+        $L.Add('    }')
         $L.Add(('    $null = New-NetFirewallRule -DisplayName {0} -Description {1} -Direction Inbound -Protocol TCP -LocalPort {2} -Action Allow -Profile Private -Enabled True' -f
                 (ConvertTo-PsLiteral $RuleName), (ConvertTo-PsLiteral 'Allows phones on the home network to reach the Voice Filter web app. Created by install.ps1, removed by uninstall.ps1.'), $PortNumber))
     }
@@ -921,6 +925,11 @@ function New-Shortcut {
 }
 
 function Get-TorchInfo {
+    <#
+      Installed torch/torchaudio: Torch/Audio = distribution versions (what pip/uv see, used
+      for the constraints file); TorchRt/AudioRt = __version__ at runtime, which always
+      carries the build tag (+cu128, +cpu), also for wheels whose metadata has no tag.
+    #>
     param([string]$Python)
     if (-not (Test-Path -LiteralPath $Python)) { return $null }
     $code = 'import json; from importlib import metadata as m; ' +
@@ -930,13 +939,23 @@ function Get-TorchInfo {
     if ($r.ExitCode -ne 0) { return $null }
     $j = Get-JsonFromOutput $r.Output
     if ($null -eq $j) { return $null }
-    return [pscustomobject]@{ Torch = (Get-ObjectValue $j @('torch')); Audio = (Get-ObjectValue $j @('torchaudio')) }
+    $info = [pscustomobject]@{ Torch = (Get-ObjectValue $j @('torch')); Audio = (Get-ObjectValue $j @('torchaudio')); TorchRt = $null; AudioRt = $null }
+    if ($info.Torch -and $info.Audio) {
+        $code = 'import json, torch, torchaudio; print(json.dumps({''t'': torch.__version__, ''a'': torchaudio.__version__}))'
+        $r = Invoke-Native -FilePath $Python -Arguments @('-c', $code) -Quiet
+        $j = Get-JsonFromOutput $r.Output
+        if ($r.ExitCode -eq 0 -and $null -ne $j) {
+            $info.TorchRt = [string](Get-ObjectValue $j @('t'))
+            $info.AudioRt = [string](Get-ObjectValue $j @('a'))
+        }
+    }
+    return $info
 }
 
 function Test-TorchTag {
     param($Info, [string]$Tag)
-    if ($null -eq $Info -or -not $Info.Torch -or -not $Info.Audio) { return $false }
-    return ($Info.Torch.EndsWith('+' + $Tag) -and $Info.Audio.EndsWith('+' + $Tag))
+    if ($null -eq $Info -or -not $Info.TorchRt -or -not $Info.AudioRt) { return $false }
+    return ($Info.TorchRt.EndsWith('+' + $Tag) -and $Info.AudioRt.EndsWith('+' + $Tag))
 }
 
 # ---------------------------------------------------------------------------
@@ -954,8 +973,11 @@ function Invoke-Step {
     catch {
         $msg = $_.Exception.Message
         Write-Log "$StepTitle failed: $msg" -Level Error
-        Write-Log ("  " + ($_.InvocationInfo.PositionMessage -replace "`r?`n", ' | ')) -Level FileOnly
-        Write-Log ("  " + ($_.ScriptStackTrace -replace "`r?`n", ' | ')) -Level FileOnly
+        try {
+            if ($null -ne $_.InvocationInfo) { Write-Log ("  " + ($_.InvocationInfo.PositionMessage -replace "`r?`n", ' | ')) -Level FileOnly }
+            Write-Log ("  " + ("$($_.ScriptStackTrace)" -replace "`r?`n", ' | ')) -Level FileOnly
+        }
+        catch { $null = $_ }
         $script:State.Steps.Add([pscustomobject]@{ Name = $StepTitle; Ok = $false; Seconds = [int]((Get-Date) - $started).TotalSeconds })
         $script:State.Problems.Add("${StepTitle}: $msg")
         if ($Soft) {
@@ -991,8 +1013,22 @@ function Step-Preflight {
     if ($P.AppDir -match '^[A-Za-z]:\\(Program Files|Windows)') {
         Write-Log 'The app folder is inside Program Files/Windows; this may cause permission problems.' -Level Warn
     }
-    if ($P.AppDir.Length -gt 120) {
-        Write-Log "The folder path is long ($($P.AppDir.Length) characters). Some Python packages have deep paths; a shorter path such as C:\VoiceFilter avoids problems with the 260 character limit." -Level Warn
+    $longPaths = $false
+    try {
+        $fsKey = Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -ErrorAction Stop
+        $lp = $fsKey.PSObject.Properties['LongPathsEnabled']
+        if ($null -ne $lp -and [int]$lp.Value -eq 1) { $longPaths = $true }
+    }
+    catch { $longPaths = $false }
+    if ($P.AppDir.Length -gt 100 -and -not $longPaths) {
+        Write-Log "The folder path is long ($($P.AppDir.Length) characters) and Windows long path support is off. PyTorch has deeply nested files; if the installation fails, move the folder to a short path such as C:\VoiceFilter." -Level Warn
+    }
+    foreach ($od in @($env:OneDrive, $env:OneDriveConsumer, $env:OneDriveCommercial)) {
+        if ($od -and (Test-PathInside -Path $P.AppDir -Root $od)) {
+            Write-Log "The app folder is inside OneDrive ($od). OneDrive would upload the 10+ GB of Python packages and models. Better: move the folder to e.g. C:\VoiceFilter and run install.bat there." -Level Warn
+            if (-not (Read-Choice -Prompt 'Install here anyway?' -Default $true)) { throw 'Cancelled by the user (folder is inside OneDrive).' }
+            break
+        }
     }
 
     # Free disk space
@@ -1169,7 +1205,7 @@ function Step-Torch {
     $chosen = $null
     foreach ($tag in $tags) {
         if (Test-TorchTag -Info $current -Tag $tag) {
-            Write-Log "PyTorch $($current.Torch) / torchaudio $($current.Audio) already installed." -Level Ok
+            Write-Log "PyTorch $($current.TorchRt) / torchaudio $($current.AudioRt) already installed." -Level Ok
             $chosen = $tag
             break
         }
@@ -1185,7 +1221,7 @@ function Step-Torch {
             $current = Get-TorchInfo -Python $P.VenvPython
             if (Test-TorchTag -Info $current -Tag $tag) { $chosen = $tag; break }
             $seen = 'not importable'
-            if ($null -ne $current) { $seen = "$($current.Torch)" }
+            if ($null -ne $current -and $current.TorchRt) { $seen = "$($current.TorchRt)" }
             Write-Log "Installed PyTorch does not carry the expected '+$tag' tag ($seen)." -Level Warn
         }
         else {
@@ -1196,13 +1232,14 @@ function Step-Torch {
         throw ('PyTorch could not be installed from: ' + ($tags -join ', ') + '. Check the internet connection, or try -TorchIndex cu126 / -Cpu.')
     }
     $script:State.TorchTag = $chosen
-    $script:State.TorchVersion = $current.Torch
-    $script:State.TorchAudioVersion = $current.Audio
+    $script:State.TorchVersion = $current.TorchRt
+    $script:State.TorchAudioVersion = $current.AudioRt
+    $script:State.TorchMeta = $current.Torch
     $constraints = "# Written by install.ps1: keeps the CUDA build of PyTorch when installing requirements.txt`r`n" +
                    "torch==$($current.Torch)`r`ntorchaudio==$($current.Audio)`r`n"
     New-Directory $P.Runtime
     Write-Utf8File -Path $P.Constraints -Text $constraints
-    Write-Log "PyTorch $($current.Torch), torchaudio $($current.Audio) ($chosen)" -Level Ok
+    Write-Log "PyTorch $($current.TorchRt), torchaudio $($current.AudioRt) ($chosen)" -Level Ok
 }
 
 function Step-Requirements {
@@ -1213,8 +1250,8 @@ function Step-Requirements {
     $after = Get-TorchInfo -Python $P.VenvPython
     $afterVersion = $null
     if ($null -ne $after) { $afterVersion = $after.Torch }
-    if ($afterVersion -ne $script:State.TorchVersion) {
-        throw "requirements.txt replaced PyTorch ($($script:State.TorchVersion) -> $afterVersion). Re-run install.bat."
+    if ($afterVersion -ne $script:State.TorchMeta) {
+        throw "requirements.txt replaced PyTorch ($($script:State.TorchMeta) -> $afterVersion). Re-run install.bat."
     }
     Write-Log 'Python packages installed.' -Level Ok
 

@@ -97,7 +97,7 @@ def make_windows(events: Sequence[Any], win: float = 1.5, hop: float = 0.5,
             continue
         n = int(np.floor((d - win) / hop)) + 1
         starts = [s + k * hop for k in range(n)]
-        if starts[-1] + win < e - hop / 2:  # cover the tail
+        if starts[-1] + win < e - 0.05:  # cover the tail
             starts.append(e - win)
         for st in starts:
             out.append(Window(st, min(e, st + win), ei))
@@ -204,8 +204,8 @@ def pitch_p_female(st: dict) -> tuple[float, float]:
     f = st.get("f0_med", 0.0)
     if f <= 0 or st.get("voiced", 0) < 0.15:
         return 0.5, 0.0
-    z = (np.log2(f) - np.log2(165.0)) / 0.18
-    p = float(1 / (1 + np.exp(-z)))
+    z = (np.log2(f) - np.log2(165.0)) / 0.3
+    p = float(np.clip(1 / (1 + np.exp(-z)), 0.1, 0.9))  # F0 alone is never decisive
     rel = min(1.0, st["voiced"] / 0.5) * (0.4 if f > 320 else 1.0)
     return p, float(rel)
 

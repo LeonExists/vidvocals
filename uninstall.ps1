@@ -486,15 +486,26 @@ function Invoke-Main {
     }
     $tempDirs = @()
     foreach ($t in @($env:TEMP, $env:TMP, [System.IO.Path]::GetTempPath())) {
-        if ($t -and -not (Test-PathInside -Path $t -Root $AppDir)) { $tempDirs += $t.TrimEnd('\') }
+        if ($t -and -not (Test-PathInside -Path $t -Root $AppDir)) {
+            try { $tempDirs += [System.IO.Path]::GetFullPath($t).TrimEnd('\', '/') } catch { $null = $_ }
+        }
     }
-    foreach ($td in ($tempDirs | Select-Object -Unique)) {
+    foreach ($td in ($tempDirs | Sort-Object -Unique)) {
         if (Test-Path -LiteralPath $td) {
             foreach ($f in (Get-ChildItem -LiteralPath $td -Filter 'voicefilter*' -Force -ErrorAction SilentlyContinue)) {
                 $stray.Add([pscustomobject]@{ Path = $f.FullName; Why = 'temporary file from Voice Filter' })
             }
         }
     }
+
+    # same file reachable through two variables (TEMP and TMP) -> list it once
+    $seenStray = @{}
+    $uniqueStray = New-Object System.Collections.Generic.List[object]
+    foreach ($s in $stray) {
+        $key = $s.Path.TrimEnd('\', '/').ToLowerInvariant()
+        if (-not $seenStray.ContainsKey($key)) { $seenStray[$key] = $true; $uniqueStray.Add($s) }
+    }
+    $stray = $uniqueStray
 
     # --- 3. inside the folder ---------------------------------------------
     Write-Section 'Removing files inside the app folder'
@@ -585,7 +596,7 @@ function Invoke-Main {
         else {
             Write-Log "The installer switched the network '$netName' from $from to Private."
             Write-Log 'Private lets devices on this network see this PC; Public is stricter. At home Private is usually right.'
-            if (Read-Choice -Prompt "Switch '$netName' back to $from?" -Default $false) {
+            if (Read-Choice -Prompt "Switch '$netName' back to ${from}?" -Default $false) {
                 $profileChanges += [pscustomobject]@{ InterfaceIndex = [int]$current.InterfaceIndex; Name = $netName; To = $from }
             }
             else {
@@ -638,6 +649,7 @@ function Invoke-Main {
         Write-Log 'Other programs may use the same files.' -Level Detail
         if (Read-Choice -Prompt 'Remove them?' -Default $false) {
             foreach ($s in $stray) {
+                if (-not (Test-Path -LiteralPath $s.Path)) { continue }
                 try {
                     Remove-Item -LiteralPath $s.Path -Recurse -Force -ErrorAction Stop
                     $script:Removed.Add($s.Path)

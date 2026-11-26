@@ -205,7 +205,7 @@ def torchaudio_present(name: str) -> bool:
         path = getattr(b, "_model_path", None) or getattr(b, "_path", None)
         if not path:
             return False
-        fname = os.path.basename(path)
-        return (config.TORCH_HOME / "hub" / "checkpoints" / fname).exists()
+        hub = config.TORCH_HOME / "hub"
+        return ((hub / "torchaudio" / path).exists() or (hub / "checkpoints" / os.path.basename(path)).exists())
     except Exception:
         return False
