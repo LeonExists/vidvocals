@@ -293,6 +293,8 @@ class JobStore:
                                               progress=self._progress_cb(jid))
         if job.get("deleted"):
             raise InterruptedError
+        if not job.get("keep_background", True):  # the analysis preview includes the background
+            self.pipeline.render_preview(d, analysis, False)
         self.update(jid, state="review", stage="review", progress=1.0, message="Ready for review",
                     duration=analysis.get("duration"), next=None)
 

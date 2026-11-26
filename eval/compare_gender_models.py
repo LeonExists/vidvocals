@@ -189,8 +189,8 @@ def main() -> None:
     write_report(res, d)
     for n, r in res.items():
         s, nv = r["slices"]["speech (all)"], r["slices"]["non-verbal phonated (all)"]
-        print(f"{n:28s} speech bacc {fmt(s['bacc'])} auc {fmt(s['auc'], False)} | NV bacc {fmt(nv['bacc'])} "
-              f"auc {fmt(nv['auc'], False)} ece {fmt(nv['ece'])}")
+        print(f"{n:28s} speech bacc {fmt(s.get('bacc'))} auc {fmt(s.get('auc'), False)} | "
+              f"NV bacc {fmt(nv.get('bacc'))} auc {fmt(nv.get('auc'), False)} ece {fmt(nv.get('ece'))}")
 
 
 if __name__ == "__main__":

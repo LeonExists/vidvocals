@@ -123,6 +123,7 @@ def fit_logreg(X, y, w, C):
 
 def fit_mlp(X, y, w, hidden=64, weight_decay=1e-3, epochs=200, lr=3e-3):
     import torch
+    torch.set_num_threads(2)
     torch.manual_seed(SEED)
     Xt = torch.tensor(X, dtype=torch.float32)
     yt = torch.tensor(y, dtype=torch.float32)

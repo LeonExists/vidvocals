@@ -376,9 +376,9 @@ class HFGenderModel:
         try:
             from huggingface_hub import snapshot_download
 
-            snapshot_download(self.spec["repo"], revision=self.spec.get("revision"),
-                              local_files_only=True)
-            return True
+            d = snapshot_download(self.spec["repo"], revision=self.spec.get("revision"),
+                                  local_files_only=True)
+            return any(Path(d).glob("*.safetensors")) or any(Path(d).glob("*.bin"))
         except Exception:
             return False
 

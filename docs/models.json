@@ -1,0 +1,532 @@
+{
+  "_doc": "Model choices per preset. See docs/MODELS.md. 'sources' are tried in order; sha256 is identical across sources where listed. verified_here = downloaded from a reachable host and run on CPU on the Linux build box (2026-11-26). Paths are relative to the app's models/ dir.",
+  "models": {
+    "sep_resurrection_bs": {
+      "type": "bs_roformer",
+      "code": "ZFTurbo/Music-Source-Separation-Training@1523206 models/bs_roformer/bs_roformer.py (MIT, vendored)",
+      "local_dir": "separation",
+      "filename": "bs_roformer_vocals_resurrection_unwa.ckpt",
+      "sha256": "9dbfe5cb572e4ed32a15ec727d7bd06c8d7aba97509e6fda5bc008bb1e0b2dd5",
+      "size_bytes": 204510749,
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "pcunwa/BS-Roformer-Resurrection",
+          "filename": "BS-Roformer-Resurrection.ckpt"
+        },
+        {
+          "kind": "url",
+          "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/bs_roformer_vocals_resurrection_unwa.ckpt"
+        }
+      ],
+      "config": {
+        "filename": "config_bs_roformer_vocals_resurrection_unwa.yaml",
+        "sources": [
+          {
+            "kind": "url",
+            "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/config_bs_roformer_vocals_resurrection_unwa.yaml",
+            "sha256": "7d6010fdc12a4919c886b099b2567ec475ae2fa8b0acf438bd83385bc0cb31d9"
+          },
+          {
+            "kind": "hf",
+            "repo_id": "pcunwa/BS-Roformer-Resurrection",
+            "filename": "BS-Roformer-Resurrection-Config.yaml",
+            "note": "upstream config differs: stft_hop_length 512 (mirror: 441) + mlp_expansion_factor/skip_connection keys; see MODELS.md 2.3 for which one measured better"
+          }
+        ]
+      },
+      "inference": {
+        "sample_rate": 44100,
+        "channels": 2,
+        "chunk_size": 785920,
+        "num_overlap": 2,
+        "target": "vocals",
+        "fp16": true
+      },
+      "license": "not stated (free community weights, personal use)",
+      "params_m": 51.0,
+      "gflop_per_audio_s_per_pass": 599.2,
+      "verified_here": true
+    },
+    "sep_kim_melband": {
+      "type": "mel_band_roformer",
+      "code": "ZFTurbo/Music-Source-Separation-Training@1523206 models/bs_roformer/mel_band_roformer.py (MIT, vendored)",
+      "local_dir": "separation",
+      "filename": "vocals_mel_band_roformer.ckpt",
+      "sha256": "87201f4d31afb5bc79993230fc49446918425574db48c01c405e44f365c7559e",
+      "size_bytes": 913106900,
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "KimberleyJSN/melbandroformer",
+          "filename": "MelBandRoformer.ckpt"
+        },
+        {
+          "kind": "url",
+          "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/vocals_mel_band_roformer.ckpt"
+        }
+      ],
+      "config": {
+        "filename": "vocals_mel_band_roformer.yaml",
+        "sources": [
+          {
+            "kind": "url",
+            "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/vocals_mel_band_roformer.yaml",
+            "sha256": "b958b29c8f7195f0d86bee6759a33980db675c4ecaf2fcaa80fa125828e6cd38"
+          },
+          {
+            "kind": "hf",
+            "repo_id": "Eddycrack864/audio-separator-models",
+            "filename": "roformers/vocals_mel_band_roformer.yaml",
+            "sha256": "b958b29c8f7195f0d86bee6759a33980db675c4ecaf2fcaa80fa125828e6cd38"
+          }
+        ]
+      },
+      "inference": {
+        "sample_rate": 44100,
+        "channels": 2,
+        "chunk_size": 352800,
+        "num_overlap": 2,
+        "target": "vocals",
+        "fp16": true
+      },
+      "license": "MIT",
+      "params_m": 228.2,
+      "gflop_per_audio_s_per_pass": 388.4,
+      "verified_here": true
+    },
+    "sep_viperx_bs_317": {
+      "type": "bs_roformer",
+      "code": "ZFTurbo/Music-Source-Separation-Training@1523206 models/bs_roformer/bs_roformer.py (MIT, vendored)",
+      "local_dir": "separation",
+      "filename": "model_bs_roformer_ep_317_sdr_12.9755.ckpt",
+      "sha256": "5b84f37e8d444c8cb30c79d77f613a41c05868ff9c9ac6c7049c00aefae115aa",
+      "size_bytes": 639331213,
+      "sources": [
+        {
+          "kind": "url",
+          "url": "https://github.com/TRvlvr/model_repo/releases/download/all_public_uvr_models/model_bs_roformer_ep_317_sdr_12.9755.ckpt"
+        },
+        {
+          "kind": "hf",
+          "repo_id": "Politrees/UVR_resources",
+          "filename": "models/Roformer/BandSplit/model_bs_roformer_ep_317_sdr_12.9755.ckpt"
+        }
+      ],
+      "config": {
+        "filename": "model_bs_roformer_ep_317_sdr_12.9755.yaml",
+        "sources": [
+          {
+            "kind": "url",
+            "url": "https://github.com/nomadkaraoke/python-audio-separator/releases/download/model-configs/model_bs_roformer_ep_317_sdr_12.9755.yaml",
+            "sha256": "2bfdd16c656bd9519aba757cc4f8834b7ede675eb1e00ec4772d74ae1c41af7f"
+          },
+          {
+            "kind": "hf",
+            "repo_id": "Politrees/UVR_resources",
+            "filename": "models/Roformer/BandSplit/config_bs_roformer_ep_317_sdr_12.9755.yaml",
+            "sha256": "2bfdd16c656bd9519aba757cc4f8834b7ede675eb1e00ec4772d74ae1c41af7f"
+          }
+        ]
+      },
+      "inference": {
+        "sample_rate": 44100,
+        "channels": 2,
+        "chunk_size": 352800,
+        "num_overlap": 2,
+        "target": "Vocals",
+        "fp16": true
+      },
+      "license": "not stated (UVR public release)",
+      "params_m": null,
+      "gflop_per_audio_s_per_pass": null,
+      "verified_here": true
+    },
+    "sep_htdemucs_ft_vocals": {
+      "type": "demucs",
+      "code": "pip demucs==4.1.0 (MIT): demucs.states.load_model(path)",
+      "local_dir": "separation",
+      "filename": "f7e0c4bc-ba3fe64a.th",
+      "sha256": "ba3fe64ae8ef66ac9a4857222ce48efbdc5eb3ad375cb79dd13debee5aaa4066",
+      "size_bytes": 84141271,
+      "sources": [
+        {
+          "kind": "url",
+          "url": "https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/f7e0c4bc-ba3fe64a.th"
+        },
+        {
+          "kind": "hf",
+          "repo_id": "adefossez/HTDemucs-ft",
+          "filename": "f7e0c4bc.safetensors",
+          "note": "safetensors re-export, load with demucs.hf"
+        }
+      ],
+      "inference": {
+        "sample_rate": 44100,
+        "channels": 2,
+        "shifts": 0,
+        "overlap": 0.25,
+        "target": "vocals"
+      },
+      "license": "MIT",
+      "params_m": 42.0,
+      "gflop_per_audio_s_per_pass": 32.6,
+      "verified_here": true,
+      "role": "ultra-fast fallback only"
+    },
+    "sep_leap_xe_optional": {
+      "type": "bs_roformer",
+      "filename": "bs_leap_xe_voc.ckpt",
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "pcunwa/BS-Roformer-Leap",
+          "filename": "Xe/bs_leap_xe_voc.ckpt"
+        }
+      ],
+      "config": {
+        "filename": "leap_xe_config_voc.yaml",
+        "sources": [
+          {
+            "kind": "hf",
+            "repo_id": "pcunwa/BS-Roformer-Leap",
+            "filename": "Xe/leap_xe_config_voc.yaml"
+          }
+        ]
+      },
+      "size_bytes": 267800000,
+      "license": "not stated",
+      "multisong_vocals_sdr_read": 11.76,
+      "verified_here": false,
+      "role": "optional Best upgrade on the user's PC (HF CDN blocked here)"
+    },
+    "emb_ecapa_taoruijie": {
+      "type": "ecapa_tdnn_taoruijie",
+      "code": "github.com/TaoRuijie/ECAPA-TDNN@4904fda model.py (MIT, vendored); ECAPA_TDNN(C=1024); strip 'speaker_encoder.' prefix",
+      "local_dir": "ecapa",
+      "filename": "pretrain.model",
+      "sha256": "a435faa17622a6bf99db8ec6fb51aafe41eb5396d3d1b837eed7e74af8c5d64f",
+      "size_bytes": 66659122,
+      "sources": [
+        {
+          "kind": "url",
+          "url": "https://raw.githubusercontent.com/TaoRuijie/ECAPA-TDNN/main/exps/pretrain.model"
+        }
+      ],
+      "inference": {
+        "sample_rate": 16000,
+        "dim": 192,
+        "window_s": 1.5,
+        "hop_s": 0.75,
+        "l2_normalize": true
+      },
+      "license": "MIT",
+      "eer_vox1_o_read": 0.96,
+      "verified_here": true
+    },
+    "emb_speechbrain_ecapa_optional": {
+      "type": "speechbrain_ecapa",
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "speechbrain/spkrec-ecapa-voxceleb"
+        }
+      ],
+      "license": "Apache-2.0",
+      "verified_here": false,
+      "role": "alternative only if the gender head is retrained on it"
+    },
+    "emb_wespeaker_resnet293_optional": {
+      "type": "wespeaker_onnx",
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "Wespeaker/wespeaker-voxceleb-resnet293-LM",
+          "filename": "voxceleb_resnet293_LM.onnx"
+        }
+      ],
+      "license": "CC-BY-4.0",
+      "verified_here": false,
+      "role": "optional better clustering embedding (Best) on the user's PC"
+    },
+    "f0_torchfcpe": {
+      "type": "torchfcpe",
+      "code": "pip torchfcpe==0.0.4 (MIT): spawn_bundled_infer_model(); weights inside the wheel",
+      "inference": {
+        "sample_rate": 16000,
+        "decoder_mode": "local_argmax",
+        "threshold": 0.006,
+        "hop_ms": 10
+      },
+      "license": "MIT",
+      "verified_here": true
+    },
+    "ssl_wavlm_base_plus": {
+      "type": "torchaudio_pipeline",
+      "pipeline": "torchaudio.pipelines.WAVLM_BASE_PLUS",
+      "sources": [
+        {
+          "kind": "url",
+          "url": "https://download.pytorch.org/torchaudio/models/wavlm_base_plus.pth"
+        }
+      ],
+      "size_bytes": 377604347,
+      "inference": {
+        "sample_rate": 16000,
+        "layers_mean_pooled": [
+          3,
+          6
+        ],
+        "dim": 1536
+      },
+      "license": "MIT (microsoft/unilm) via torchaudio",
+      "verified_here": true
+    },
+    "gender_head_ecapa_f0": {
+      "type": "trained_head",
+      "inputs": [
+        "emb_ecapa_taoruijie",
+        "f0_torchfcpe"
+      ],
+      "file": "voicefilter/assets/gender_head.* (trained by eval/train_gender_head.py on speech + non-verbal data)",
+      "verified_here": "features yes; head is trained by the eval agent"
+    },
+    "gender_head_wavlm": {
+      "type": "trained_head",
+      "inputs": [
+        "ssl_wavlm_base_plus"
+      ],
+      "file": "voicefilter/assets/gender_head_wavlm.* (trained by eval agent)",
+      "verified_here": "features yes; head is trained by the eval agent"
+    },
+    "gender_audeering_optional": {
+      "type": "hf_audio_classification_custom",
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "audeering/wav2vec2-large-robust-6-ft-age-gender"
+        }
+      ],
+      "license": "CC-BY-NC-SA-4.0 (non-commercial; personal use OK)",
+      "verified_here": false,
+      "role": "optional extra opinion (also female/male/child)"
+    },
+    "tagger_dymn10": {
+      "type": "efficientat_dymn",
+      "code": "github.com/fschmid56/EfficientAT@a425fdc (MIT, vendored) + patches listed in MODELS.md 6.7",
+      "pretrained_name": "dymn10_as",
+      "local_dir": "torch/efficientat",
+      "filename": "dymn10_as.pt",
+      "sha256": "f363baafb6f9dd807c55a60254565ff94373ea0964f08730ea8cf23d1865725d",
+      "size_bytes": 42498109,
+      "sources": [
+        {
+          "kind": "url",
+          "url": "https://github.com/fschmid56/EfficientAT/releases/download/v0.0.1/dymn10_as.pt"
+        }
+      ],
+      "inference": {
+        "sample_rate": 32000,
+        "n_mels": 128,
+        "win_length": 800,
+        "hop": 320,
+        "window_s": 10.0,
+        "classes": 527
+      },
+      "license": "MIT",
+      "audioset_map_read": 47.7,
+      "verified_here": true
+    },
+    "tagger_dymn20": {
+      "type": "efficientat_dymn",
+      "code": "same as tagger_dymn10, width_mult=2.0",
+      "pretrained_name": "dymn20_as",
+      "local_dir": "torch/efficientat",
+      "filename": "dymn20_as_mAP_493.pt",
+      "sources": [
+        {
+          "kind": "url",
+          "url": "https://github.com/fschmid56/EfficientAT/releases/download/v0.0.1/dymn20_as_mAP_493.pt"
+        }
+      ],
+      "inference": {
+        "sample_rate": 32000,
+        "n_mels": 128,
+        "win_length": 800,
+        "hop": 320,
+        "window_s": 10.0,
+        "classes": 527
+      },
+      "license": "MIT",
+      "audioset_map_read": 49.1,
+      "verified_here": "same code path and host as dymn10_as; not run"
+    },
+    "vad_silero": {
+      "type": "silero_vad",
+      "code": "pip silero-vad==6.3 (MIT): load_silero_vad(); weights inside the wheel",
+      "inference": {
+        "sample_rate": 16000,
+        "threshold": 0.5,
+        "role": "speech label only; activity = energy on vocal stem"
+      },
+      "license": "MIT",
+      "verified_here": true
+    },
+    "vad_energy_stem": {
+      "type": "energy",
+      "inference": {
+        "frame_ms": 20,
+        "threshold_db_below_p95": 35,
+        "hangover_ms": 150,
+        "min_event_ms": 80
+      },
+      "verified_here": "n/a (no weights)"
+    },
+    "ovl_sepformer_whamr16k": {
+      "type": "speechbrain_sepformer",
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "speechbrain/sepformer-whamr16k"
+        }
+      ],
+      "inference": {
+        "sample_rate": 16000,
+        "num_spk": 2
+      },
+      "license": "Apache-2.0",
+      "verified_here": false,
+      "fallback": "ovl_convtasnet_libri2mix"
+    },
+    "ovl_convtasnet_libri2mix": {
+      "type": "torchaudio_pipeline",
+      "pipeline": "torchaudio.pipelines.CONVTASNET_BASE_LIBRI2MIX",
+      "inference": {
+        "sample_rate": 8000,
+        "num_spk": 2
+      },
+      "license": "torchaudio BSD-2; trained on Libri2Mix",
+      "verified_here": true
+    },
+    "diar_pyannote_community1_optional": {
+      "type": "pyannote_pipeline",
+      "sources": [
+        {
+          "kind": "hf",
+          "repo_id": "pyannote/speaker-diarization-community-1",
+          "gated": true,
+          "needs_user_hf_token": true
+        }
+      ],
+      "license": "CC-BY-4.0 (gated: free HF account + accept conditions)",
+      "verified_here": false,
+      "role": "optional upgrade only, never required"
+    }
+  },
+  "presets": {
+    "fast": {
+      "separation": {
+        "model": "sep_resurrection_bs",
+        "repo_id": "pcunwa/BS-Roformer-Resurrection",
+        "filename": "bs_roformer_vocals_resurrection_unwa.ckpt",
+        "config": "config_bs_roformer_vocals_resurrection_unwa.yaml",
+        "type": "bs_roformer",
+        "num_overlap": 2,
+        "fallback": "sep_htdemucs_ft_vocals"
+      },
+      "vad": {
+        "primary": "vad_energy_stem",
+        "speech_label": "vad_silero"
+      },
+      "embedding": {
+        "model": "emb_ecapa_taoruijie",
+        "clustering": "agglomerative_cosine"
+      },
+      "gender": [
+        "gender_head_wavlm",
+        "gender_head_ecapa_f0"
+      ],
+      "tagger": {
+        "model": "tagger_dymn10",
+        "use": "kind label (speech/nonverbal) only"
+      },
+      "overlap_detection": "heuristic_flag_only",
+      "overlap_separation": null
+    },
+    "balanced": {
+      "separation": {
+        "model": "sep_kim_melband",
+        "repo_id": "KimberleyJSN/melbandroformer",
+        "filename": "vocals_mel_band_roformer.ckpt",
+        "config": "vocals_mel_band_roformer.yaml",
+        "type": "mel_band_roformer",
+        "num_overlap": 2,
+        "fallback": "sep_resurrection_bs"
+      },
+      "vad": {
+        "primary": "vad_energy_stem",
+        "speech_label": "vad_silero"
+      },
+      "embedding": {
+        "model": "emb_ecapa_taoruijie",
+        "clustering": "agglomerative_cosine"
+      },
+      "gender": [
+        "gender_head_wavlm",
+        "gender_head_ecapa_f0"
+      ],
+      "tagger": {
+        "model": "tagger_dymn10",
+        "use": "kind label + male/female speech logits as weak gender cue (not fused by default)"
+      },
+      "overlap_detection": "heuristic_flag",
+      "overlap_separation": null,
+      "optional_upgrades": [
+        "gender_audeering_optional",
+        "diar_pyannote_community1_optional"
+      ]
+    },
+    "best": {
+      "separation": {
+        "model": [
+          "sep_kim_melband",
+          "sep_viperx_bs_317"
+        ],
+        "ensemble": "mean_waveform",
+        "type": "ensemble",
+        "num_overlap": 2,
+        "optional_member": "sep_leap_xe_optional"
+      },
+      "vad": {
+        "primary": "vad_energy_stem",
+        "speech_label": "vad_silero"
+      },
+      "embedding": {
+        "model": "emb_ecapa_taoruijie",
+        "clustering": "agglomerative_cosine",
+        "optional_clustering_embedding": "emb_wespeaker_resnet293_optional"
+      },
+      "gender": [
+        "gender_head_wavlm",
+        "gender_head_ecapa_f0",
+        "tagger_gender_logits"
+      ],
+      "tagger": {
+        "model": "tagger_dymn20",
+        "fallback": "tagger_dymn10",
+        "use": "kind label + gender cue + overlap evidence"
+      },
+      "overlap_detection": "heuristic_flag + separated-source energy",
+      "overlap_separation": {
+        "model": "ovl_sepformer_whamr16k",
+        "fallback": "ovl_convtasnet_libri2mix",
+        "keep": "female source (gender head on each source)"
+      },
+      "optional_upgrades": [
+        "gender_audeering_optional",
+        "diar_pyannote_community1_optional",
+        "sep_leap_xe_optional"
+      ]
+    }
+  }
+}

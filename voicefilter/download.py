@@ -73,7 +73,12 @@ def preset_models(pid: str) -> tuple[list[str], list[str]]:
     req = [p["separation"], p.get("embedding", "ecapa_tao")]
     if p.get("overlap") == "separate" and p.get("overlap_model"):
         req.append(p["overlap_model"])
-    opt = [p[k] for k in ("hf_gender", "tagger") if p.get(k)]
+    opt = []
+    if p.get("tagger") and "tagger" in p.get("gender_models", []):
+        # GitHub-hosted taggers are required, HF-only ones optional
+        (req if presets.model_spec(p["tagger"]).get("type") == "efficientat" else opt).append(p["tagger"])
+    if p.get("hf_gender") and "hf" in p.get("gender_models", []):
+        opt.append(p["hf_gender"])
     return list(dict.fromkeys(req)), [m for m in dict.fromkeys(opt) if m not in req]
 
 

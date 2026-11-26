@@ -27,7 +27,7 @@ Build box: Linux, no GPU, 4 shared CPU cores. Every number below says whether it
 | **Vocal separation** (44.1 kHz stereo) | BS-RoFormer **Resurrection** (unwa), 51 M params, 204 MB | **Mel-Band RoFormer Kim** (KimberleyJSN), 228 M params, 913 MB | **Ensemble: Kim Mel-Band + BS-RoFormer viperx ep_317** (waveform average) | yes, all three: downloaded from GitHub releases, sha256 equals the HF original, run on CPU (section 6.1) |
 | **Activity / VAD** | energy gate on the vocal stem (+ silero-vad v6 as a speech label only) | same | same | yes, silero (pip-bundled weights) |
 | **Speaker embedding / clustering** | **ECAPA-TDNN (TaoRuijie, VoxCeleb2)** 192-d, own agglomerative clustering | same | same + optional WeSpeaker ResNet293-LM (HF) for clustering | ECAPA: yes (raw GitHub). ResNet293: not verifiable here (HF CDN) |
-| **Gender** | trained head on ECAPA embedding + F0 stats (torchfcpe) | + head on **WavLM-Base+** (torchaudio) features, fused | + tagger male/female-speech logits + speaker-level vote (all presets do the vote) | yes: ECAPA, WavLM-Base+, torchfcpe all run here. Heads are trained by the eval agent |
+| **Gender** | fused heads: **WavLM-Base+** (torchaudio) features + ECAPA embedding + F0 stats (torchfcpe), speaker-level vote | same | + tagger male/female-speech logits, longer context windows | yes: WavLM-Base+, ECAPA, torchfcpe all run here. Heads are trained by the eval agent |
 | **Event tagger** (speech vs non-verbal; scream/laugh/moan...) | **EfficientAT dymn10_as** (10.6 M, mAP 47.7) | dymn10_as | **dymn20_as** (40 M, mAP 49.1) | dymn10_as: yes (GitHub release). dymn20_as: same source, not run |
 | **Overlap detection** | none (flag only from embedding/tagger evidence) | heuristic flagging | heuristic + optional pyannote segmentation-3.0 (gated, user token) | heuristic: n/a. pyannote: not verifiable here |
 | **Overlap separation** (2 speakers) | none | none | **SepFormer-WHAMR 16 kHz** (SpeechBrain), fallback **torchaudio ConvTasNet Libri2Mix (8 kHz)** | SepFormer: not verifiable here (HF CDN). ConvTasNet: yes |
@@ -49,9 +49,10 @@ Exact identifiers, file names, URLs and sha256 are in `docs/models.json`.
 2. **Pitch alone does not work for male non-verbal sounds.** F0 median > 165 Hz gives 95 % on speech
    but only **11 % on male screams/laughs/yells/cheers** (males go high) and 62 % on male emotional
    vocalizations. F0 is still a useful *feature* for the head. It must not be the decision rule.
-3. **Embedding heads trained on speech only generalise poorly to non-verbal sounds** (section 5, table).
-   Training the head with non-verbal examples from other speakers helps a lot, which supports the plan's
-   "trained head on speech + non-verbal data" idea. The EARS dataset (github release, CC-BY-NC-4.0, 107
+3. **Speech-only heads drop 15-40 points on non-verbal sounds** (section 5). Of the cues we can run here, **WavLM-Base+ features**
+   held up best: 98 % on speech and 76-83 % on non-verbal sounds with a head trained only on LibriSpeech. ECAPA got 81 % / 60-64 % and F0 95 % / 54-61 %.
+   So WavLM-Base+ goes into **every** preset (it costs only a few GPU seconds), and the heads must be trained on speech **plus**
+   non-verbal data from **many** speakers (a 7-speaker head was at chance). The EARS dataset (github release, CC-BY-NC-4.0, 107
    speakers with gender metadata, screams/laughs/crying/coughs/moan-like emotional freeform) is **reachable here**
    and is a very good training/eval source for the eval agent.
 4. **Separation quality matters more than anything else downstream**: residual male voice that the separator
@@ -188,9 +189,9 @@ None of these was trained on non-verbal vocalizations with gender labels. That i
 
 ### 4.2 Recommended gender stack (all free, verifiable here)
 
-- **Features:** ECAPA (TaoRuijie) 192-d embedding, F0 stats from **torchfcpe** (MIT, weights bundled in the pip wheel,
-  CPU RTF 0.08 here) such as log-median F0, IQR and voiced ratio, and in Balanced/Best **WavLM-Base+** (torchaudio
-  pipeline from download.pytorch.org) mean-pooled hidden states of layers 3+6 (1536-d).
+- **Features (all presets):** **WavLM-Base+** (torchaudio pipeline from download.pytorch.org, MIT) mean-pooled hidden states of
+  layers 3+6 (1536-d; the strongest cue measured here, and the eval agent may tune which layers), ECAPA (TaoRuijie) 192-d embedding,
+  and F0 stats from **torchfcpe** (MIT, weights bundled in the pip wheel, CPU RTF 0.08 here) such as log-median F0, IQR and voiced ratio.
 - **Heads:** logistic regression / small MLP trained by the eval agent on speech **and** non-verbal clips with
   gender labels (EARS, plus whatever else the eval agent can reach). Fuse by averaging logits, with weights tuned on held-out speakers.
 - **Speaker-level vote** (all presets): confidence-weighted mean of segment posteriors per cluster, then shrink each
@@ -210,11 +211,38 @@ the GitHub release zips via HTTP range requests (`scratchpad/models/httpzip.py`)
 resampled to 16 kHz, 334 clips in total. Speech-only training data for the heads: LibriSpeech dev-clean (openslr; 40 speakers,
 20 F / 20 M, 6 utterances each, cropped to 4 s), speaker-disjoint from EARS.
 
-GENDER_TABLE
+Accuracy per clip type (overall [male-correct, female-correct]); the heads were trained on **LibriSpeech speech only** (logistic regression):
+
+| Classifier (all verified here) | speech (n=43) | whisper (24) | emotional freeform: pain/ecstasy/desire/relief (94) | non-verbal: laugh/scream/cry/yell/cheer (109) | vegetative: cough/throat/sneeze/yawn (64) | all (334) | CPU RTF |
+|---|---|---|---|---|---|---|---|
+| F0 median > 165 Hz (torchfcpe) | 95 % [100, 91] | 62 % [92, 33] | 76 % [62, 89] | **54 % [11, 98]** | 61 % [42, 79] | 67 % | 0.08 |
+| ECAPA (TaoRuijie) + LogReg | 81 % [86, 77] | 83 % [67, 100] | 72 % [64, 81] | 60 % [47, 72] | 64 % [45, 82] | 69 % | 1.05* |
+| **WavLM-Base+ L3+L6 mean + LogReg** | **98 %** [95, 100] | 54 % [8, 100] | **82 %** [64, 100] | **76 %** [76, 76] | **83 %** [94, 73] | **80 %** | 0.51* |
+| EfficientAT dymn10_as, P(female speech) > P(male speech) | 93 % | 62 % | 85 % | 68 % | 61 % | – | 0.15* |
+
+\* CPU RTF with 2 threads on a box loaded at 12-18 by other agents; it would be several times faster unloaded.
+
+What this says (sanity level only, 8 test speakers, 3 s clips; the eval agent does the real evaluation):
+- Every speech-trained classifier loses 15-40 points on non-verbal sounds. **Male screams, laughs, yells and cheers are the main
+  failure** (high-pitched). Female whispers fail for F0 and ECAPA, and male whispers fail for WavLM.
+- **WavLM-Base+ features were the most robust** single cue on non-verbal sounds (76-83 %), even with a speech-only head.
+  That is why Balanced/Best fuse it in. It is the plan's "wav2vec2 second opinion", but it is verifiable here and MIT.
+- Fusion and training heads on non-verbal data are needed. A quick leave-one-speaker-out head on ECAPA+F0 trained on the
+  other 7 EARS speakers was at **chance (51 %)**: with that few speakers the head learns identities, not gender.
+  **Train heads on many speakers** (EARS has 107 speakers with gender metadata, all reachable here; add LibriSpeech/others).
+- Speaker-level consistency (cluster vote) is essential for screams and laughs inside a conversation.
 
 **silero-vad v6.3** (pip-bundled weights, 16 kHz, threshold 0.5, CPU RTF 0.008 with 1 thread): share of each clip flagged as speech
 
-VAD_TABLE
+| EARS clip type | silero speech coverage | energy-active share | clips with **no** silero detection |
+|---|---|---|---|
+| speech (sentences regular / neutral) | 73-79 % | 98 % | 0 % |
+| whisper | 55 % | 100 % | 8 % |
+| emotional freeform (pain, ecstasy, desire, relief) | 63-87 % | 94-99 % | 0 % |
+| laughter (open / closed) | 59 / 50 % | 84-96 % | 11-14 % |
+| crying, yelling, cheering | 36-43 % | 81-92 % | 18-29 % |
+| **screaming** | **0 %** | 89 % | **100 %** |
+| coughing, sneezing, throat clearing, yawning | 10-18 % | 76-92 % | 35-56 % |
 
 **EfficientAT dymn10_as** on the same 3 s clips (top-1 class counts): sneezes are found as `Sneeze` (10/13), coughs as
 `Throat clearing`/`Cough`, whispers as `Whispering` (19/24), crying as `Gasp`/`Wail, moan`. Screams are weak (`Screaming` top-1 in only 3/15;

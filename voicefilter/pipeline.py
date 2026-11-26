@@ -183,8 +183,18 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
     # ---------------------------------------------------------------- separate
     pr.start("separate", "separating vocals")
     sep_spec = presets.model_spec(P["separation"])
-    sep_info = separation.run_separation(work / "audio.wav", work / "vocals.wav", work / "background.wav",
-                                         sep_spec, progress=pr.sub(), device=dev)
+    st = path.stat()
+    stamp = {"input": path.name, "size": st.st_size, "mtime": int(st.st_mtime), "frames": n44,
+             "model": P["separation"], "spec": json.dumps(sep_spec, sort_keys=True, default=str)}
+    old = _read_json(work / "separation_stamp.json")
+    if (old == stamp and (work / "vocals.wav").exists() and (work / "background.wav").exists()
+            and sf.info(str(work / "vocals.wav")).frames == n44):
+        sep_info = {"backend": P["separation"], "cached": True}
+        notes.append("vocal separation reused from a previous run of the same file and model")
+    else:
+        sep_info = separation.run_separation(work / "audio.wav", work / "vocals.wav", work / "background.wav",
+                                             sep_spec, progress=pr.sub(), device=dev)
+        _write_json(work / "separation_stamp.json", stamp)
     models_used["separation"] = P["separation"]
 
     # ---------------------------------------------------------------- activity
@@ -271,7 +281,10 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
             tg = tagger_mod.make_tagger(presets.model_spec(P["tagger"]), dev)
             if tg.present():
                 tg.load()
-                tag = tg.predict_many(clips)
+                # taggers are trained on 10 s clips: give them >= 3 s of context around each window
+                tclips = [features.cut(x16, (w.start + w.end) / 2 - 1.5, (w.start + w.end) / 2 + 1.5)
+                          for w in windows]
+                tag = tg.predict_many(tclips)
                 tg.unload()
                 models_used["tagger"] = P["tagger"]
             else:
@@ -290,8 +303,11 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
         ev = events[w.event]
         kind = _kind_from_vad(ev.vad_ratio)
         if tag is not None:
-            ps, pn = tag[i, 2], tag[i, 3]
-            kind = "speech" if ps >= 0.5 and ps > pn else ("nonverbal" if pn > ps else kind)
+            ps, pn = float(tag[i, 2]), float(tag[i, 3])
+            if ps >= 0.2 and ps > 2 * pn:
+                kind = "speech"
+            elif pn > ps and ev.vad_ratio < 0.5:
+                kind = "nonverbal"
         wkind.append(kind)
         evd: dict[str, tuple[float, float]] = {}
         if p_head is not None:
@@ -301,9 +317,10 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
         if p_hf is not None:
             evd["hf"] = (float(p_hf[i]), 1.0 if kind == "speech" else 0.6)
         if tag is not None:
-            fs, ms = tag[i, 0], tag[i, 1]
-            if fs + ms > 0.2:
-                evd["tagger"] = (float(fs / (fs + ms)), float(min(1.0, (fs + ms))))
+            fs, ms = float(tag[i, 0]), float(tag[i, 1])
+            if fs + ms > 1e-3:
+                pt = float(gender.sigmoid(gender.logit(fs, 1e-4) - gender.logit(ms, 1e-4)))
+                evd["tagger"] = (pt, float(np.clip(tag[i, 2] * 1.5, 0.0, 1.0)))
         l, _ = gender.fuse(evd, kind, weights, head_available=p_head is not None)
         if ev.quiet:
             l *= 0.8  # quiet events: a bit less certain

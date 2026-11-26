@@ -21,7 +21,7 @@ MALE = ("Male speech, man speaking", "Male singing")
 SPEECH = ("Speech", "Conversation", "Narration, monologue", "Male speech, man speaking",
           "Female speech, woman speaking", "Child speech, kid speaking")
 NONVERBAL = ("Laughter", "Giggle", "Snicker", "Belly laugh", "Chuckle, chortle", "Crying, sobbing",
-             "Whimper", "Groan", "Grunt", "Sigh", "Gasp", "Breathing", "Pant", "Wheeze", "Moan",
+             "Whimper", "Groan", "Grunt", "Sigh", "Gasp", "Breathing", "Pant", "Wheeze", "Moan", "Wail, moan",
              "Screaming", "Shout", "Yell", "Battle cry", "Whoop", "Humming", "Cough", "Sneeze",
              "Throat clearing", "Sniff", "Snort", "Whistling", "Baby cry, infant cry")
 
@@ -35,8 +35,10 @@ class HFTagger:
         try:
             from huggingface_hub import snapshot_download
 
-            snapshot_download(self.spec["repo"], revision=self.spec.get("revision"), local_files_only=True)
-            return True
+            d = snapshot_download(self.spec["repo"], revision=self.spec.get("revision"), local_files_only=True)
+            from pathlib import Path as _P
+
+            return any(_P(d).glob("*.safetensors")) or any(_P(d).glob("*.bin"))
         except Exception:
             return False
 
@@ -76,8 +78,63 @@ class HFTagger:
         features.free_torch()
 
 
-def make_tagger(spec: dict, device: Optional[str] = "cpu") -> HFTagger:
+class EfficientATTagger:
+    """EfficientAT DyMN (dymn10_as / dymn20_as, MIT, weights from GitHub releases)."""
+
+    def __init__(self, spec: dict, device: str = "cpu"):
+        self.spec, self.device = spec, device
+        self.model = None
+
+    def present(self) -> bool:
+        from . import modelstore
+
+        return modelstore.present(self.spec["id"], self.spec["weights"])
+
+    def download(self) -> None:
+        from . import modelstore
+
+        modelstore.resolve(self.spec["id"], self.spec["weights"], download=True, verbose=True)
+
+    def load(self) -> None:
+        from . import modelstore
+        from .third_party import efficientat
+
+        path = modelstore.resolve(self.spec["id"], self.spec["weights"], download=True)
+        self.model, self.mel = efficientat.load_dymn(path, float(self.spec.get("width_mult", 1.0)), self.device)
+        lab = {n: i for i, n in enumerate(efficientat.labels())}
+        pick = lambda names: [lab[n] for n in names if n in lab]  # noqa: E731
+        self.idx = [pick(FEMALE[:1]), pick(MALE[:1]), pick(SPEECH), pick(NONVERBAL)]
+
+    def predict_many(self, clips: list[np.ndarray], bs: int = 16) -> np.ndarray:
+        import soxr
+        import torch
+
+        out = np.zeros((len(clips), 4), np.float32)
+        x32 = [soxr.resample(np.asarray(c, np.float32), features.SR16, 32000) if len(c) else np.zeros(3200, np.float32)
+               for c in clips]
+        by_len: dict[int, list[int]] = {}
+        for i, x in enumerate(x32):
+            by_len.setdefault(len(x), []).append(i)
+        with torch.inference_mode():
+            for _, ids in by_len.items():
+                for k in range(0, len(ids), bs):
+                    sel = ids[k:k + bs]
+                    t = torch.from_numpy(np.stack([x32[i] for i in sel])).to(self.device)
+                    logits, _ = self.model(self.mel(t).unsqueeze(1))
+                    p = torch.sigmoid(logits.float()).cpu().numpy()
+                    for j, cls in enumerate(self.idx):
+                        out[sel, j] = p[:, cls].max(axis=1) if cls else 0.0
+        return out
+
+    def unload(self) -> None:
+        self.model = None
+        features.free_torch()
+
+
+def make_tagger(spec: dict, device: Optional[str] = "cpu"):
     t = spec.get("type", "hf_audio_tagger")
+    if t == "efficientat":
+        return EfficientATTagger(spec, device or "cpu")
     if t in ("hf_audio_tagger", "tagger"):
         return HFTagger(spec, device or "cpu")
     raise ValueError(f"unknown tagger type {t!r}")
