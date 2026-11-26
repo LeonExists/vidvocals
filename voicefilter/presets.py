@@ -89,6 +89,14 @@ MODELS: dict[str, dict[str, Any]] = {
         "license": "BSD-3-Clause (Audio Spectrogram Transformer, AudioSet)",
     },
     # ---------------------------------------------------------------- overlap separation
+    "wavlm_base_plus": {
+        "kind": "embedding", "type": "torchaudio", "bundle": "WAVLM_BASE_PLUS", "size_mb": 360,
+        "license": "MIT (microsoft/unilm WavLM, torchaudio pipeline)",
+    },
+    "ovl_sepformer_whamr16k": {
+        "kind": "speech_separation", "type": "speechbrain_sepformer", "repo": "speechbrain/sepformer-whamr16k",
+        "sample_rate": 16000, "size_mb": 113, "license": "Apache-2.0", "optional": True,
+    },
     "ovl_convtasnet_libri2mix": {
         "kind": "speech_separation", "type": "torchaudio", "bundle": "CONVTASNET_BASE_LIBRI2MIX",
         "sample_rate": 8000, "size_mb": 20, "license": "torchaudio pipeline (Libri2Mix, CC BY 4.0 data)",
@@ -98,38 +106,42 @@ MODELS: dict[str, dict[str, Any]] = {
 PRESETS: dict[str, dict[str, Any]] = {
     "fast": {
         "name": "Fast",
-        "description": "Small BS-RoFormer vocal separation, gender head on speaker embeddings + "
-                       "pitch, speaker clustering. Quickest.",
+        "description": "BS-RoFormer vocal separation (single pass), trained gender head, speaker "
+                       "clustering. Quickest.",
         "separation": "sep_resurrection_bs",
+        "separation_params": {"num_overlap": 1},
         "embedding": "ecapa_tao",
         "window": 1.5, "hop": 0.75,
-        "gender_models": ["head", "tagger", "pitch"],
+        "gender_models": ["head", "pitch"],
         "tagger": "tagger_dymn10",
         "overlap": "off",
         "cluster_threshold": 0.65,
     },
     "balanced": {
         "name": "Balanced",
-        "description": "Mel-Band RoFormer vocal separation, fused gender models, speaker "
-                       "clustering and overlap flagging.",
-        "separation": "sep_kim_melband",
+        "description": "BS-RoFormer vocal separation (2x overlap), fused gender models, speaker "
+                       "clustering and overlap flagging. Recommended.",
+        "separation": "sep_resurrection_bs",
+        "separation_params": {"num_overlap": 2},
         "embedding": "ecapa_tao",
         "window": 1.5, "hop": 0.5,
-        "gender_models": ["head", "hf", "tagger", "pitch"],
+        "gender_models": ["head", "hf", "pitch"],
         "tagger": "tagger_dymn10",
         "overlap": "flag",
         "cluster_threshold": 0.65,
     },
     "best": {
         "name": "Best",
-        "description": "Ensemble of two RoFormer vocal models, all gender models, overlapping "
+        "description": "BS-RoFormer vocal separation (4x overlap), all gender cues, overlapping "
                        "male/female speech is separated and only the female voice kept. Slowest.",
-        "separation": "sep_ens_kim_viperx",
+        "separation": "sep_resurrection_bs",
+        "separation_params": {"num_overlap": 4},
         "embedding": "ecapa_tao",
         "window": 1.5, "hop": 0.5,
         "gender_models": ["head", "hf", "tagger", "pitch"],
         "overlap": "separate",
         "overlap_model": "ovl_convtasnet_libri2mix",
+        "overlap_models": ["ovl_sepformer_whamr16k", "ovl_convtasnet_libri2mix"],
         "tagger": "tagger_dymn20",
         "cluster_threshold": 0.65,
     },
@@ -181,7 +193,8 @@ def _translate_research(data: dict) -> dict:
                     x.setdefault("sha256", m["sha256"])
             cfg = m["config"]
             conf = ([{"path": local + cfg["filename"]}] if local and cfg.get("filename") else []) + \
-                [x for x in (_src(s_) for s_ in cfg.get("sources", [])) if x]
+                [x for x in (_src(s_) for s_ in cfg.get("sources", [])
+                             if "differs" not in str(s_.get("note", ""))) if x]
             spec = {"kind": "separation", "type": t, "ckpt": ckpt, "config": conf,
                     "license": m.get("license", ""), "size_mb": round((m.get("size_bytes") or 0) / 2**20)}
             for k in ("chunk_size", "num_overlap", "fp16"):
@@ -192,6 +205,12 @@ def _translate_research(data: dict) -> dict:
             if m.get("verified_here") is not True:
                 spec["unverified"] = True
             models_out[mid] = spec
+        elif t == "speechbrain_sepformer":
+            hf = next((x for x in m.get("sources", []) if x.get("kind") == "hf"), None)
+            if hf:
+                models_out[mid] = {"kind": "speech_separation", "type": "speechbrain_sepformer",
+                                   "repo": hf["repo_id"], "sample_rate": int(inf.get("sample_rate", 16000)),
+                                   "license": m.get("license", ""), "optional": True}
         elif t == "efficientat_dymn" and m.get("filename"):
             name = str(m.get("pretrained_name", mid))
             wm = 2.0 if "20" in name else (0.4 if "04" in name else 1.0)
@@ -216,6 +235,8 @@ def _translate_research(data: dict) -> dict:
                 out["separation"] = eid
             elif isinstance(mm, str) and mm in known:
                 out["separation"] = mm
+            if "num_overlap" in sep:
+                out["separation_params"] = {"num_overlap": int(sep["num_overlap"])}
         tg = p.get("tagger")
         if isinstance(tg, dict):
             for cand in (tg.get("model"), tg.get("fallback")):
@@ -227,11 +248,11 @@ def _translate_research(data: dict) -> dict:
             out["embedding"] = alias[emb["model"]]
         ov = p.get("overlap_separation")
         if isinstance(ov, dict):
-            for cand in (ov.get("model"), ov.get("fallback")):
-                c = alias.get(cand, cand) if isinstance(cand, str) else None
-                if c and c in known:
-                    out["overlap_model"] = c
-                    break
+            cands = [alias.get(c, c) for c in (ov.get("model"), ov.get("fallback")) if isinstance(c, str)]
+            cands = [c for c in cands if c in known]
+            if cands:
+                out["overlap_models"] = cands
+                out["overlap_model"] = cands[-1]  # verified fallback is the required one
         if out:
             presets_out[pid] = out
     return {"models": models_out, "presets": presets_out}

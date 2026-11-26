@@ -6,9 +6,10 @@ Two detectors are combined (union):
    floor (running low percentile over ~8 s, clamped by a global floor).  Hysteresis: an event
    starts above ``floor + on_db`` and continues while above ``floor + off_db``.  This catches
    non-verbal sounds (moans, breaths, grunts) that speech VADs ignore.
-2. **Silero VAD** (MIT, bundled weights) - speech probability per 32 ms; robust for quiet
-   speech in residual noise.  Optional: if the package is missing the energy detector alone
-   is used.
+2. **Silero VAD** (MIT, bundled weights) - speech probability per 32 ms.  It is blind to
+   screams and most non-verbal sounds (docs/MODELS.md), so by default it only *labels*
+   events (``vad_ratio`` -> speech vs non-verbal kind) and never decides activity;
+   ``vad_gates=True`` adds VAD-only regions as events.
 
 Post-processing: gaps < ``merge_gap`` are merged, events shorter than ``min_event`` are only
 kept if they are clearly loud (else dropped as clicks), every event is padded by ``pad``.
@@ -41,6 +42,7 @@ class ActivityParams:
     pad: float = 0.045
     short_keep_db: float = 18.0  # short events kept if this far above the floor
     use_vad: bool = True
+    vad_gates: bool = False      # silero misses screams/coughs: it only labels speech by default
 
 
 @dataclass
@@ -59,18 +61,28 @@ class Event:
         return self.end - self.start
 
 
-def frame_db(x: np.ndarray, sr: int, hop_s: float = HOP_S, win_s: float = WIN_S) -> np.ndarray:
-    """RMS level per frame in dBFS (frames centred at k*hop)."""
+def frame_db(x: np.ndarray, sr: int, hop_s: float = HOP_S, win_s: float = WIN_S,
+             block_frames: int = 200000) -> np.ndarray:
+    """RMS level per frame in dBFS (frames centred at k*hop), computed block-wise so that
+    multi-hour stems need little extra memory."""
     hop = int(round(hop_s * sr))
     win = int(round(win_s * sr))
     n = max(1, int(np.ceil(len(x) / hop)))
     pad = win // 2
-    xp = np.pad(x.astype(np.float32), (pad, pad + win))
-    # cumulative sum of squares -> O(N) moving RMS
-    c = np.concatenate([[0.0], np.cumsum(xp.astype(np.float64) ** 2)])
-    idx = np.arange(n) * hop
-    e = (c[idx + win] - c[idx]) / win
-    return (10.0 * np.log10(np.maximum(e, 1e-12))).astype(np.float32)
+    out = np.empty(n, np.float32)
+    for f0 in range(0, n, block_frames):
+        f1 = min(n, f0 + block_frames)
+        a = f0 * hop - pad
+        b = (f1 - 1) * hop - pad + win
+        seg = x[max(0, a):max(0, min(len(x), b))].astype(np.float64)
+        seg = np.pad(seg, (max(0, -a), max(0, b - max(a, len(x)) if b > len(x) else 0)))
+        if len(seg) < b - a:
+            seg = np.pad(seg, (0, b - a - len(seg)))
+        c = np.concatenate([[0.0], np.cumsum(seg ** 2)])
+        idx = (np.arange(f0, f1) - f0) * hop
+        e = (c[idx + win] - c[idx]) / win
+        out[f0:f1] = 10.0 * np.log10(np.maximum(e, 1e-12))
+    return out
 
 
 def adaptive_floor(db: np.ndarray, p: ActivityParams) -> np.ndarray:
@@ -181,7 +193,8 @@ def detect_events(x16: np.ndarray, sr: int = 16000, params: Optional[ActivityPar
         vact = _hysteresis(vad_frames, np.full(n, p.vad_threshold), np.full(n, p.vad_neg_threshold))
         # VAD alone must still have *some* energy (avoid hallucinated speech in silence)
         vact &= db > (trig_min - 6.0)
-        act |= vact
+        if p.vad_gates:
+            act |= vact
 
     runs = _runs(act)
     # merge small gaps

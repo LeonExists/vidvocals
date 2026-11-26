@@ -66,36 +66,70 @@ def candidates(d: Data) -> "OrderedDict[str, dict]":
     out["pitch_165"] = {"p": p, "desc": "median F0 (pyin) > 165 Hz, no training"}
 
     # (1b) pitch tuned on train speakers
-    def train_and_predict(features, model="logreg", C=1.0, include_nv=True, **kw):
-        X, *_ = d.X(features)
+    def train_and_predict(features, model="logreg", C=1.0, include_nv=True, layers=WAVLM_LAYERS_DEFAULT,
+                          cv_only=False, **kw):
+        X, *_ = d.X(features, layers)
         m = d.train_mask(include_nv)
         w = balanced_weights(d, m)
         z_oof = oof_logits(model, X[m], d.y[m], w[m], d.speaker[m], C, **kw)
         a, b = platt(z_oof, d.y[m], w[m])
+        p_oof = sigmoid(a * z_oof + b)
+        cv = metrics(p_oof, d.y[m])
+        # speaker-grouped CV on the TRAIN non-verbal clips (also when the head was trained without them)
+        nvm = d.train_mask(True) & (d.group == "nonverbal")
+        if include_nv:
+            idx = np.flatnonzero(m)
+            sel = d.group[idx] == "nonverbal"
+            cv["nonverbal"] = metrics(p_oof[sel], d.y[idx][sel])
+        if cv_only:
+            return None, cv
         mu, sd, params = fit(model, X[m], d.y[m], w[m], C, **kw)
         z = logits(model, params, (X - mu) / sd)
-        cv = metrics(sigmoid(a * z_oof + b), d.y[m])
+        if not include_nv:
+            cv["nonverbal"] = metrics(sigmoid(a * z[nvm] + b), d.y[nvm])
         return sigmoid(a * z + b), cv
 
     feats_avail = set(d.arrays)
     plan = [("pitch_tuned", "pitch", "logreg", 1.0, True, "logreg on 6 pitch stats"),
             ("hand", "hand", "logreg", 1.0, True, "logreg on 22 pitch/spectral/MFCC features"),
-            ("hand_mlp", "hand", "mlp", 1.0, True, "MLP(64) on 22 handcrafted features")]
+            ("hand_mlp", "hand", "mlp", 1.0, True, "MLP(64) on 22 handcrafted features [shipped as gender_head_nofeat.npz]")]
     if "ecapa" in feats_avail:
         plan += [("ecapa", "ecapa", "logreg", 0.3, True, "logreg on ECAPA-TDNN (Tao, Vox2) 192-d"),
                  ("ecapa+hand", "ecapa+hand", "logreg", 0.3, True, "logreg on ECAPA + handcrafted"),
-                 ("ecapa+hand_mlp", "ecapa+hand", "mlp", 1.0, True, "MLP(64) on ECAPA + handcrafted"),
+                 ("ecapa+hand_mlp", "ecapa+hand", "mlp", 1.0, True, "MLP(64) on ECAPA + handcrafted [shipped as gender_head_ecapa.npz]"),
                  ("ecapa+hand[speech-only]", "ecapa+hand", "logreg", 0.3, False,
                   "ablation: logreg on ECAPA + handcrafted, trained WITHOUT non-verbal clips")]
+    layers = {}
     if "wavlm" in feats_avail:
-        plan += [("wavlm+hand", "wavlm+hand", "logreg", 0.3, True,
-                  f"logreg on WavLM Base+ layers {WAVLM_LAYERS_DEFAULT} mean + handcrafted"),
+        # choose the WavLM layer set by speaker-grouped CV on TRAIN speakers (non-verbal bacc)
+        scan = {}
+        for ls in [(2,), (4,), (6,), (8,), (10,), (12,), (3, 4, 5), (4, 5, 6), (6, 7, 8), (8, 9, 10),
+                   tuple(range(1, 13))]:
+            _, cv = train_and_predict("wavlm+hand", "logreg", 0.3, True, layers=ls, cv_only=True)
+            scan["-".join(map(str, ls))] = {"cv_bacc": cv["bacc"], "cv_nv_bacc": cv["nonverbal"]["bacc"]}
+            print("wavlm layers", ls, scan["-".join(map(str, ls))], flush=True)
+        best = max(scan, key=lambda k: (scan[k]["cv_nv_bacc"], scan[k]["cv_bacc"]))
+        LAYER_SCAN.update(scan)
+        layers = {"layers": tuple(int(x) for x in best.split("-"))}
+        plan += [("wavlm", "wavlm", "logreg", 0.3, True, f"logreg on WavLM Base+ layers {best} mean only"),
+                 ("wavlm+hand", "wavlm+hand", "logreg", 0.3, True,
+                  f"logreg on WavLM Base+ layers {best} mean + handcrafted"),
+                 ("wavlm+hand_mlp", "wavlm+hand", "mlp", 1.0, True, f"MLP(64) on WavLM {best} + handcrafted [shipped as gender_head.npz]"),
+                 ("wavlm+hand[speech-only]", "wavlm+hand", "logreg", 0.3, False,
+                  "ablation: WavLM + handcrafted trained WITHOUT non-verbal clips"),
                  ("ecapa+wavlm+hand", "ecapa+wavlm+hand", "logreg", 0.3, True,
-                  "logreg on ECAPA + WavLM + handcrafted")]
+                  "logreg on ECAPA + WavLM + handcrafted"),
+                 ("ecapa+wavlm+hand_mlp", "ecapa+wavlm+hand", "mlp", 1.0, True,
+                  "MLP(64) on ECAPA + WavLM + handcrafted (needs two embeddings; not shipped)")]
     for name, feats, model, C, inv, desc in plan:
-        p, cv = train_and_predict(feats, model, C, inv)
+        kw = layers if "wavlm" in feats else {}
+        p, cv = train_and_predict(feats, model, C, inv, **kw)
         out[name] = {"p": p, "desc": desc, "train_cv": cv}
+        print(f"trained {name}: train-CV bacc {cv['bacc']:.3f} NV {cv.get('nonverbal', {}).get('bacc')}", flush=True)
     return out
+
+
+LAYER_SCAN: dict = {}
 
 
 def evaluate(d: Data, cands) -> dict:
@@ -109,6 +143,11 @@ def evaluate(d: Data, cands) -> dict:
         slices[f"non-verbal {v}"] = test & (d.group == "nonverbal") & (d.variant == v)
     for src in sorted(set(d.source[test & (d.group == "speech")])):
         slices[f"speech src={src}"] = test & (d.group == "speech") & (d.source == src)
+    slices["speech whispered (EARS)"] = test & (d.category == "ears_whisper")
+    for src in sorted(set(d.source[test & (d.group == "nonverbal")])):
+        slices[f"non-verbal src={src}"] = test & (d.group == "nonverbal") & (d.source == src)
+        for g, gl in ((1, "F"), (0, "M")):
+            slices[f"non-verbal src={src} gender={gl}"] = test & (d.group == "nonverbal") & (d.source == src) & (d.y == g)
     for cat in sorted(set(d.category[test & np.isin(d.group, ["nonverbal", "nonverbal_nonphonated"])])):
         slices[f"nv cat={cat}"] = test & (d.category == cat)
     buckets = np.array([duration_bucket(x) for x in d.dur])
@@ -147,7 +186,8 @@ def write_report(res: dict, d: Data) -> None:
          "and WavLM Base+ from torchaudio (download.pytorch.org).", ""]
     main_slices = ["speech (all)", "non-verbal phonated (all)", "non-verbal non-phonated (clicks etc.)"]
     L += ["## Headline: speech vs non-verbal", "",
-          "| model | " + " | ".join(f"{s} acc / bacc / AUC / ECE" for s in main_slices) + " | train CV bacc |",
+          "| model | " + " | ".join(f"{s} acc / bacc / AUC / ECE" for s in main_slices)
+          + " | train-CV bacc (all / non-verbal) |",
           "|---|" + "---|" * (len(main_slices) + 1)]
     for n in names:
         cells = []
@@ -156,8 +196,13 @@ def write_report(res: dict, d: Data) -> None:
             cells.append(f"{fmt(m.get('acc'))} / {fmt(m.get('bacc'))} / {fmt(m.get('auc'), False)} / "
                          f"{fmt(m.get('ece'))}")
         cv = res[n].get("train_cv")
-        L.append(f"| {n} | " + " | ".join(cells) + f" | {fmt(cv['bacc']) if cv else '-'} |")
+        cvn = (cv or {}).get("nonverbal", {}).get("bacc")
+        L.append(f"| {n} | " + " | ".join(cells) + f" | {fmt(cv['bacc']) if cv else '-'} / {fmt(cvn)} |")
     L += ["", "Model descriptions:", ""] + [f"- **{n}**: {res[n]['desc']}" for n in names] + [""]
+    if LAYER_SCAN:
+        L += ["## WavLM layer selection (speaker-grouped 5-fold CV on TRAIN speakers, WavLM + handcrafted, logreg)",
+              "", "| layers (1-based, time-mean, averaged) | CV bacc all | CV bacc non-verbal |", "|---|---|---|"]
+        L += [f"| {k} | {fmt(v['cv_bacc'])} | {fmt(v['cv_nv_bacc'])} |" for k, v in LAYER_SCAN.items()] + [""]
 
     def table(title, keys):
         T = [f"## {title}", "", "| slice | n (F/M) | " + " | ".join(names) + " |",
@@ -185,7 +230,8 @@ def main() -> None:
     cands = candidates(d)
     res = evaluate(d, cands)
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
-    (RESULTS_DIR / "gender_models.json").write_text(json.dumps(res, indent=1))
+    (RESULTS_DIR / "gender_models.json").write_text(json.dumps({"models": res, "wavlm_layer_scan": LAYER_SCAN},
+                                                               indent=1))
     write_report(res, d)
     for n, r in res.items():
         s, nv = r["slices"]["speech (all)"], r["slices"]["non-verbal phonated (all)"]

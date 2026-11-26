@@ -18,6 +18,7 @@ NonverbalTTS (VoxCeleb/Expresso clips with groans, grunts, breathing, laughter a
 | id | corpus | what we use | labels used | speakers (F/M) | license |
 |---|---|---|---|---|---|
 | `deeply` | Deeply Nonverbal Vocalization Dataset, [OpenSLR 99](https://www.openslr.org/99/) (public ~1 % sample) | all 727 clips, 16 classes, phone recordings, 16 kHz | class, speaker id, sex (`0=female, 1=male` per the dataset PDF), noise | 408 usable (2 ids with conflicting sex dropped) | **CC BY-NC-ND 4.0** (non-commercial, no derivatives) |
+| `ears` | [EARS](https://github.com/facebookresearch/ears_dataset) (Meta, GitHub release zips, 48 kHz studio) | 10 files per speaker: screaming, crying, open laughter, yelling, yawning, coughing, freeform **pain** and **ecstasy** expressions (non-verbal), one regular and one **whispered** sentence (speech); only the first 14 s of each file are range-read, the loudest 3 s are kept | self-reported gender (`speaker_statistics.json`; 4 speakers "prefer not to answer"/non-binary skipped) | 103 (60/43) | **CC BY-NC 4.0** |
 | `librispeech` | LibriSpeech dev-clean + test-clean, [OpenSLR 12](https://www.openslr.org/12/) | first 15 utterances per speaker | SPEAKERS.TXT sex | 80 (40/40) | CC BY 4.0 |
 | `crowd` | Google crowdsourced multi-speaker sets, OpenSLR [83](https://www.openslr.org/83/) (UK/Irish English dialects), [61](https://www.openslr.org/61/) (es-AR), [70](https://www.openslr.org/70/) (en-NG), [86](https://www.openslr.org/86/) (Yoruba), [63](https://www.openslr.org/63/) (Malayalam), [78](https://www.openslr.org/78/) (Gujarati), [69](https://www.openslr.org/69/) (Catalan), [76](https://www.openslr.org/76/) (Basque), [66](https://www.openslr.org/66/) (Telugu) | up to 10 speakers x 4 clips per gender-zip, fetched with HTTP range requests (no full zips) | gender from the zip, speaker id from the file name | ~225, 12 languages/dialects, 48 kHz | CC BY-SA 4.0 |
 | `crema` | [CREMA-D](https://github.com/CheyneyComputerScience/CREMA-D) (GitHub LFS) | 8 clips per actor covering all 6 emotions (anger, disgust, fear, happy, neutral, sad; incl. shouted/high-intensity takes) | VideoDemographics.csv sex | 91 (43/48) | ODbL 1.0 / DbCL 1.0 |
@@ -26,8 +27,9 @@ NonverbalTTS (VoxCeleb/Expresso clips with groans, grunts, breathing, laughter a
 | noise | [ESC-50](https://github.com/karolpiczak/ESC-50) | 4 clips each of 20 non-human classes (rain, wind, engine, vacuum, keyboard, birds, dog, ...) | - | - | CC BY-NC 3.0 (dataset); per-clip CC0/CC BY |
 | synthetic | generated in `build_dataset.py` | pink/brown noise, 50/60 Hz hum, slow modulation (room tone / AC), synthetic exponential-decay RIRs | - | - | - |
 
-Licensing consequences: the Deeply, ESC-50 and some music clips are **non-commercial**; Deeply is
-additionally **no-derivatives**. We only use them locally for evaluation and to fit a small classifier
+Licensing consequences: EARS, Deeply, ESC-50 and some music clips are **non-commercial**; Deeply is
+additionally **no-derivatives**. The gender head is trained on EARS + Deeply, so **the head is for
+personal, non-commercial use only**. We only use them locally for evaluation and to fit a small classifier
 head; the mixes built from them must not be redistributed, and the trained head weights
 (`voicefilter/assets/gender_head*.npz`) are a derived artifact of NC-ND data — fine for this private,
 non-commercial tool, but do not ship them commercially. A commercially clean head can be trained with
@@ -37,7 +39,7 @@ non-commercial tool, but do not ship them commercially. A commercially clean hea
 ## Splits (speaker-disjoint)
 
 `speaker -> test` iff `sha1("voicefilter-split-v1:" + speaker) < test_fraction[source]` (0.5 for Deeply,
-0.4 otherwise). No speaker is in both splits; the trained heads use only `train` speakers; the
+0.5 for EARS, 0.4 otherwise). No speaker is in both splits; the trained heads use only `train` speakers; the
 synthetic mixes and every number in `GENDER_MODELS.md` / `REPORT.md` use only `test` speakers.
 
 Non-verbal clips per split (phonated = vocal-fold sounds; non-phonated = mouth/teeth/nose noises):
@@ -53,18 +55,17 @@ teeth-chattering, teeth-grinding, tongue-clicking, lip-popping, lip-smacking, no
 
 ## Coverage gaps (honest list)
 
-- **Grunts, groans and effort sounds are missing as a labelled category.** Deeply "moaning" (Korean
-  crowd-sourced, mostly pain/discomfort moans) is the closest; there are only 45 moaning clips, 27 F / 18 M,
-  i.e. about 20 per split. Sexual moans, grunts during physical effort, whimpers and gasps are not covered
-  by any reachable labelled corpus. Numbers for "non-verbal" are therefore dominated by
-  screaming / sighing / panting / yawning / coughing.
-- **Male non-verbal clips are scarce** (45 phonated in test). Male-side accuracies have wide confidence
-  intervals (±7-10 % at 95 %).
-- **Non-verbal speakers are Korean adults recorded on Android phones**; speech is read or acted speech.
-  No spontaneous conversational speech, no children.
-- In the synthetic scenes a "speaker" pairs a speech speaker with non-verbal clips of other people of the
-  same gender (no corpus has both from one person), so speaker-level consistency between a person's speech
-  and their moans is weaker than in real videos (this makes speaker clustering harder, not easier).
-- Whispered speech is not covered; breathy sounds come only from sighing / panting / yawning.
+- **Grunts and effort sounds are not a labelled category anywhere we could reach.** The closest are EARS
+  freeform *pain* (groans, moans, cries of pain) and *ecstasy* (pleasure moans, sighs, exclamations; may
+  contain words) with ~100 speakers, and Deeply "moaning" (45 clips, Korean phone recordings, mostly
+  pain/discomfort). Grunts during physical effort, whimpers and gasps have no dedicated labels.
+- Male non-verbal clips: Deeply has few (45 phonated in test); EARS adds ~43 male speakers x 8 sounds.
+- Deeply speakers are Korean adults on Android phones; EARS speakers are mostly US English studio
+  recordings. Speech is read or acted. No spontaneous conversational speech, no children.
+- In the synthetic scenes about half of the speakers are EARS speakers whose speech and non-verbal sounds
+  come from the same person; the others pair a speech speaker with non-verbal clips of other people of the
+  same gender, so speaker-level consistency is weaker than in real videos for those.
+- EARS speech is only two 3 s sentences per speaker (one whispered), so EARS speakers' speech turns repeat.
+- Whispered speech: only the EARS whispered sentence; breathy sounds: sighing / panting / yawning.
 - Reverb is synthetic (exponential decay noise, RT60 0.3-0.9 s); real room responses (SLR 28) were not
   downloaded to save space.

@@ -5,6 +5,9 @@ Reproducible: every subset choice is a deterministic function of file names
 files that already exist are skipped.
 
 Sources (see eval/DATA.md for licenses and coverage):
+  ears       EARS (GitHub release zips, CC BY-NC 4.0): 103 speakers with gender; screams, crying,
+             laughter, yelling, yawns, coughs, pain / ecstasy expressions + regular / whispered
+             sentence; first 14 s per file via HTTP range, loudest 3 s kept.  ~1.4 GB download
   slr99      Deeply Nonverbal Vocalization Dataset (OpenSLR 99): 16 non-verbal classes,
              ~410 speakers, sex labels.                                    ~45 MB
   libri      LibriSpeech dev-clean + test-clean (OpenSLR 12), SPEAKERS.TXT gender.
@@ -420,6 +423,105 @@ def fetch_esc50() -> None:
     print(f"esc50: {len(jobs)} clips")
 
 
+# EARS (facebookresearch/ears_dataset, GitHub release zips, CC BY-NC 4.0): 107 speakers with
+# self-reported gender, 48 kHz studio recordings incl. screams, crying, laughter, yelling, coughs,
+# yawns and freeform pain / ecstasy / desire expressions. The zip members are STORED, so we read only
+# the first EARS_SECONDS of each wanted file with HTTP range requests and keep the loudest
+# EARS_CHUNK-second window (FLAC, 48 kHz mono).
+EARS_URL = "https://github.com/facebookresearch/ears_dataset/releases/download/dataset/{spk}.zip"
+EARS_STATS = f"{GH_RAW}/facebookresearch/ears_dataset/main/speaker_statistics.json"
+EARS_FILES = {  # file stem -> (kind, category)
+    "nonverbal_screaming": ("nonverbal", "ears_screaming"),
+    "nonverbal_crying": ("nonverbal", "ears_crying"),
+    "nonverbal_laughter_open": ("nonverbal", "ears_laughing"),
+    "nonverbal_yelling": ("nonverbal", "ears_yelling"),
+    "vegetative_yawning": ("nonverbal", "ears_yawning"),
+    "vegetative_coughing": ("nonverbal", "ears_coughing"),
+    "emo_pain_freeform": ("nonverbal", "ears_pain"),
+    "emo_extasy_freeform": ("nonverbal", "ears_ecstasy"),
+    "sentences_01_regular": ("speech", "ears_regular"),
+    "sentences_02_whisper": ("speech", "ears_whisper"),
+}
+EARS_SECONDS = 14.0
+EARS_CHUNK = 3.0
+
+
+def _parse_wav_prefix(b: bytes):
+    """Return (sr, channels, bits, data_offset) from the first bytes of a RIFF/WAVE file."""
+    assert b[:4] == b"RIFF" and b[8:12] == b"WAVE", "not a wav"
+    pos, fmt = 12, None
+    while pos + 8 <= len(b):
+        cid, size = b[pos:pos + 4], struct.unpack("<I", b[pos + 4:pos + 8])[0]
+        if cid == b"fmt ":
+            tag, ch, sr, _, _, bits = struct.unpack("<HHIIHH", b[pos + 8:pos + 24])
+            fmt = (sr, ch, bits, tag)
+        if cid == b"data":
+            return fmt[0], fmt[1], fmt[2], fmt[3], pos + 8
+        pos += 8 + size + (size & 1)
+    raise ValueError("no data chunk in prefix")
+
+
+def fetch_ears() -> None:
+    import numpy as np
+    import soundfile as sf
+    out = RAW_DIR / "ears"
+    out.mkdir(parents=True, exist_ok=True)
+    stats = json.loads(download(EARS_STATS, out / "speaker_statistics.json").read_text())
+    download(f"{GH_RAW}/facebookresearch/ears_dataset/main/LICENSE", out / "LICENSE")
+    for spk in sorted(stats):
+        g = stats[spk].get("gender")
+        if g not in ("male", "female"):
+            continue
+        marker = out / spk / ".done"
+        if marker.exists():
+            continue
+        url = EARS_URL.format(spk=spk)
+        rf = HttpRangeFile(url)
+        zf = zipfile.ZipFile(io.BufferedReader(rf, buffer_size=1 << 16))
+        infos = {Path(i.filename).stem: i for i in zf.infolist()}
+        (out / spk).mkdir(exist_ok=True)
+
+        def job(stem):
+            info = infos.get(stem)
+            dest = out / spk / f"{stem}.flac"
+            if info is None or dest.exists() or info.compress_type != zipfile.ZIP_STORED:
+                return
+            start = info.header_offset
+            hdr = http_get(rf.url, {"Range": f"bytes={start}-{start + 29}"})
+            n_name, n_extra = struct.unpack("<HH", hdr[26:30])
+            d0 = start + 30 + n_name + n_extra
+            pre = http_get(rf.url, {"Range": f"bytes={d0}-{d0 + 4095}"})
+            sr, ch, bits, tag, off = _parse_wav_prefix(pre)
+            bps = bits // 8 * ch
+            nbytes = min(info.file_size - off, int(EARS_SECONDS * sr) * bps)
+            raw = http_get(rf.url, {"Range": f"bytes={d0 + off}-{d0 + off + nbytes - 1}"})
+            raw = raw[: len(raw) // bps * bps]
+            if tag == 3 and bits == 32:
+                x = np.frombuffer(raw, "<f4").reshape(-1, ch).mean(1)
+            elif bits == 16:
+                x = np.frombuffer(raw, "<i2").reshape(-1, ch).mean(1) / 32768.0
+            elif bits == 24:
+                a = np.frombuffer(raw, np.uint8).reshape(-1, 3)
+                v = (a[:, 0].astype(np.int32) | (a[:, 1].astype(np.int32) << 8) | (a[:, 2].astype(np.int32) << 16))
+                v = np.where(v >= 1 << 23, v - (1 << 24), v)
+                x = v.reshape(-1, ch).mean(1) / float(1 << 23)
+            else:
+                raise ValueError(f"unsupported wav format {tag}/{bits}")
+            L = int(EARS_CHUNK * sr)
+            if len(x) > L:
+                hop = sr // 20
+                e = np.array([np.mean(x[i:i + hop] ** 2) for i in range(0, len(x) - hop, hop)])
+                w = int(EARS_CHUNK * 20)
+                k = int(np.argmax(np.convolve(e, np.ones(w), "valid"))) if len(e) > w else 0
+                x = x[k * hop:k * hop + L]
+            sf.write(str(dest), x.astype(np.float32), sr, subtype="PCM_16")
+
+        with ThreadPoolExecutor(4) as ex:
+            list(ex.map(job, list(EARS_FILES)))
+        marker.write_text("ok")
+        print(f"ears {spk} ({g}) done", flush=True)
+
+
 # --------------------------------------------------------------------------- manifest
 DEEPLY_SEX = {0: "F", 1: "M"}  # from the dataset description PDF: {0: Female, 1: Male}
 
@@ -511,12 +613,25 @@ def build_manifest() -> list[dict]:
             rows.append(dict(clip_id=f"am_{p.stem}", path=rel(p), source="audiomnist",
                              speaker=f"am:{spk}", gender=g, kind="speech", category="digit",
                              lang="en/de", duration=_dur(p), license="MIT"))
+    # EARS
+    eroot = RAW_DIR / "ears"
+    if (eroot / "speaker_statistics.json").exists():
+        stats = json.loads((eroot / "speaker_statistics.json").read_text())
+        for p in sorted(eroot.glob("p*/*.flac")):
+            spk = p.parent.name
+            g = {"male": "M", "female": "F"}.get(stats.get(spk, {}).get("gender"))
+            if g is None or p.stem not in EARS_FILES:
+                continue
+            kind, cat = EARS_FILES[p.stem]
+            rows.append(dict(clip_id=f"ears_{spk}_{p.stem}", path=rel(p), source="ears", speaker=f"ears:{spk}",
+                             gender=g, kind=kind, category=cat, lang="en", duration=_dur(p),
+                             license="CC-BY-NC-4.0"))
     rows = [r for r in rows if r["duration"] > 0 and r["gender"] in ("F", "M")]
     write_manifest(rows)
     return rows
 
 
-TEST_FRACTION = {"deeply": 0.5, "librispeech": 0.4, "crowd": 0.4, "crema": 0.4, "audiomnist": 0.4}
+TEST_FRACTION = {"deeply": 0.5, "ears": 0.5, "librispeech": 0.4, "crowd": 0.4, "crema": 0.4, "audiomnist": 0.4}
 
 
 def build_splits(rows: list[dict]) -> dict:
@@ -544,7 +659,7 @@ def summarize(rows: list[dict], splits: dict) -> None:
     print("total clips", len(rows), "speakers", len(splits["speakers"]))
 
 
-FETCHERS = {"slr99": fetch_slr99, "libri": fetch_libri, "crowd": fetch_crowd, "crema": fetch_crema,
+FETCHERS = {"ears": fetch_ears, "slr99": fetch_slr99, "libri": fetch_libri, "crowd": fetch_crowd, "crema": fetch_crema,
             "audiomnist": fetch_audiomnist, "music": fetch_music, "esc50": fetch_esc50}
 
 

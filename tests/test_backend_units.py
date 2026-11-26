@@ -155,3 +155,58 @@ def test_config_paths_inside_app():
 
     assert tempfile.gettempdir() == str(config.TMP_DIR)
     assert os.environ["HF_HUB_DISABLE_TELEMETRY"] == "1"
+
+
+def test_research_models_json_translation():
+    """docs/models.json (research schema) drives the presets when present."""
+    if not (config.DOCS_DIR / "models.json").exists():
+        pytest.skip("no docs/models.json")
+    presets.reload()
+    ov = {p: presets.get_preset(p).get("separation_params", {}).get("num_overlap") for p in ("fast", "balanced", "best")}
+    assert ov == {"fast": 1, "balanced": 2, "best": 4}
+    spec = presets.model_spec(presets.get_preset("fast")["separation"])
+    assert spec["type"] in ("bs_roformer", "mel_band_roformer", "ensemble")
+    if spec["type"] != "ensemble":
+        assert spec["ckpt"] and spec["config"]
+        assert all("hf" in s or "url" in s or "path" in s for s in spec["ckpt"] + spec["config"])
+
+
+def test_embedder_kinds():
+    assert features.embedder_for_kind("ecapa_tao_vox2_192") == "ecapa_tao"
+    assert features.embedder_for_kind("wavlm_base_plus_L4-5-6_mean") == "wavlm:4-5-6"
+    assert features.embedder_for_kind("none") is None
+    with pytest.raises(ValueError):
+        features.embedder_for_kind("something_else")
+    assert features.make_embedder("wavlm:3-6").layers == (3, 6)
+
+
+def test_num_overlap_one_has_crossfade(tmp_path):
+    x = np.random.default_rng(3).standard_normal((50000, 2)).astype(np.float32) * 0.1
+    sf.write(str(tmp_path / "m.wav"), x, SR, subtype="FLOAT")
+
+    class One(Doubler):
+        num_overlap = 1
+
+    separation.separate_file(tmp_path / "m.wav", tmp_path / "v.wav", tmp_path / "b.wav", One({}))
+    v, _ = sf.read(str(tmp_path / "v.wav"), dtype="float32", always_2d=True)
+    assert np.allclose(v, 0.5 * x, atol=1e-5)
+
+
+def test_overlap_mask_estimates_split_fullband():
+    from voicefilter import overlap
+
+    sr = 44100
+    t = np.arange(sr * 2) / sr
+    lo = 0.3 * np.sin(2 * np.pi * 200 * t)
+    hi = 0.3 * np.sin(2 * np.pi * 1500 * t)
+    v44 = np.stack([lo + hi] * 2, 1).astype(np.float32)
+    import soxr
+
+    s_lo, s_hi = (soxr.resample(x.astype(np.float32), sr, 16000) for x in (lo, hi))
+    ea, eb = overlap.mask_estimates(v44, s_hi, s_lo, sr)
+    mid = slice(sr // 4, -sr // 4)
+    assert ea.shape == v44.shape
+    assert np.corrcoef(ea[mid, 0], hi[mid])[0, 1] > 0.99
+    assert np.corrcoef(eb[mid, 0], lo[mid])[0, 1] > 0.99
+    g = overlap.ls_gains(lo + hi, np.stack([lo * 2, hi * 0.5]))
+    assert np.allclose(g, [0.5, 2.0], atol=1e-6)

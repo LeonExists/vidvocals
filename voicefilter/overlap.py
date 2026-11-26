@@ -101,24 +101,60 @@ def regions_from_windows(windows: Sequence[Any], cand: np.ndarray, p: OverlapPar
 # 2-speaker separation (Best preset)
 # ---------------------------------------------------------------------------
 class SpeechSeparator:
-    """torchaudio ConvTasNet (Libri2Mix, 8 kHz) by default; spec from presets.MODELS."""
+    """2-speaker separation: SpeechBrain SepFormer-WHAMR! 16 kHz (HF, optional, tried first)
+    or torchaudio ConvTasNet Libri2Mix 8 kHz (verified fallback)."""
 
     def __init__(self, spec: dict, device: str = "cpu"):
         self.spec, self.device = spec, device
         self.model = None
         self.sr = int(spec.get("sample_rate", 8000))
 
+    def _sb_dir(self):
+        from . import config
+
+        return config.MODELS_DIR / "speechbrain" / self.spec["repo"].replace("/", "--")
+
     def present(self) -> bool:
-        if self.spec.get("type") == "torchaudio":
+        t = self.spec.get("type")
+        if t == "torchaudio":
             return modelstore.torchaudio_present(self.spec["bundle"])
+        if t == "speechbrain_sepformer":
+            try:
+                import speechbrain  # noqa: F401
+            except Exception:
+                return False
+            d = self._sb_dir()
+            return d.exists() and any(d.glob("*.ckpt"))
         return False
 
     def download(self) -> None:
-        if self.spec.get("type") == "torchaudio":
+        t = self.spec.get("type")
+        if t == "torchaudio":
             modelstore.torchaudio_bundle(self.spec["bundle"]).get_model()
+        elif t == "speechbrain_sepformer":
+            self._load_sb("cpu")
+            self.model = None
+
+    def _load_sb(self, device: str):
+        from speechbrain.inference.separation import SepformerSeparation
+
+        kw = {}
+        try:
+            from speechbrain.utils.fetching import LocalStrategy
+
+            kw["local_strategy"] = LocalStrategy.COPY  # no symlinks (Windows)
+        except Exception:
+            pass
+        self.model = SepformerSeparation.from_hparams(source=self.spec["repo"], savedir=str(self._sb_dir()),
+                                                      run_opts={"device": device}, **kw)
+        self.sr = int(self.spec.get("sample_rate", 16000))
 
     def load(self) -> None:
-        if self.spec.get("type") != "torchaudio":
+        t = self.spec.get("type")
+        if t == "speechbrain_sepformer":
+            self._load_sb(self.device)
+            return
+        if t != "torchaudio":
             raise ValueError(f"unsupported speech separation model {self.spec}")
         b = modelstore.torchaudio_bundle(self.spec["bundle"])
         self.sr = int(getattr(b, "sample_rate", self.sr))
@@ -132,8 +168,12 @@ class SpeechSeparator:
         x = soxr.resample(x16.astype(np.float32), features.SR16, self.sr) if self.sr != features.SR16 else x16
         sd = float(np.std(x)) + 1e-8
         with torch.inference_mode():
-            t = torch.from_numpy((x / sd).astype(np.float32))[None, None].to(self.device)
-            y = self.model(t)[0].float().cpu().numpy()  # (2, n)
+            if self.spec.get("type") == "speechbrain_sepformer":
+                t = torch.from_numpy((x / sd).astype(np.float32))[None].to(self.device)
+                y = self.model.separate_batch(t)[0].float().cpu().numpy().T  # (T, 2) -> (2, T)
+            else:
+                t = torch.from_numpy((x / sd).astype(np.float32))[None, None].to(self.device)
+                y = self.model(t)[0].float().cpu().numpy()  # (2, n)
         y = y * sd
         if self.sr != features.SR16:
             y = np.stack([soxr.resample(s, self.sr, features.SR16) for s in y])
@@ -153,36 +193,40 @@ def ls_gains(mix: np.ndarray, sources: np.ndarray) -> np.ndarray:
     return g
 
 
-def female_mask_replacement(vocals44: np.ndarray, src_f16: np.ndarray, src_m16: np.ndarray,
-                            sr44: int = 44100, band_hz: float = 3800.0) -> np.ndarray:
-    """Apply a soft female mask (from 16 kHz separated sources) to the full-band stem.
-
-    vocals44: (n, ch) float32 -> (n, ch) female-only estimate.
-    """
+def mask_estimates(vocals44: np.ndarray, src_a16: np.ndarray, src_b16: np.ndarray,
+                   sr44: int = 44100, band_hz: Optional[float] = None) -> tuple[np.ndarray, np.ndarray]:
+    """Full-band estimates of the two speakers: soft T-F masks from the (8/16 kHz) separated
+    sources applied to the 44.1 kHz vocal stem.  Above the separator's band the per-frame
+    share of the 1 kHz..band range is used.  vocals44: (n, ch) -> two (n, ch) arrays."""
     import soxr
+    from scipy.ndimage import uniform_filter1d
     from scipy.signal import istft, stft
 
     n = len(vocals44)
-    up = [soxr.resample(s.astype(np.float32), features.SR16, sr44) for s in (src_f16, src_m16)]
+    band_hz = band_hz or 3800.0
+    up = [soxr.resample(x.astype(np.float32), features.SR16, sr44) for x in (src_a16, src_b16)]
     up = [u[:n] if len(u) >= n else np.pad(u, (0, n - len(u))) for u in up]
     nper, hop = 2048, 512
-    _, _, Sf = stft(up[0], sr44, nperseg=nper, noverlap=nper - hop)
-    _, _, Sm = stft(up[1], sr44, nperseg=nper, noverlap=nper - hop)
-    pf, pm = np.abs(Sf) ** 2, np.abs(Sm) ** 2
-    M = pf / (pf + pm + 1e-10)
+    _, _, Sa = stft(up[0], sr44, nperseg=nper, noverlap=nper - hop)
+    _, _, Sb = stft(up[1], sr44, nperseg=nper, noverlap=nper - hop)
+    pa, pb = np.abs(Sa) ** 2, np.abs(Sb) ** 2
+    M = pa / (pa + pb + 1e-10)
     freqs = np.fft.rfftfreq(nper, 1 / sr44)
     band = (freqs >= 1000) & (freqs <= band_hz)
-    hi = freqs > band_hz
-    w = (pf + pm)[band]
-    frame_share = (M[band] * w).sum(0) / (w.sum(0) + 1e-10)
-    M[hi] = frame_share[None, :]
-    # light temporal smoothing against musical noise
-    from scipy.ndimage import uniform_filter1d
-
-    M = uniform_filter1d(M, size=3, axis=1)
-    out = np.zeros_like(vocals44, dtype=np.float32)
+    w = (pa + pb)[band]
+    share = (M[band] * w).sum(0) / (w.sum(0) + 1e-10)
+    M[freqs > band_hz] = share[None, :]
+    M = uniform_filter1d(M, size=3, axis=1)  # against musical noise
+    outs = [np.zeros_like(vocals44, dtype=np.float32) for _ in range(2)]
     for c in range(vocals44.shape[1]):
         _, _, V = stft(vocals44[:, c], sr44, nperseg=nper, noverlap=nper - hop)
-        _, y = istft(V * M[:, :V.shape[1]], sr44, nperseg=nper, noverlap=nper - hop)
-        out[:, c] = y[:n] if len(y) >= n else np.pad(y, (0, n - len(y)))
-    return out
+        for k, mk in enumerate((M, 1.0 - M)):
+            _, y = istft(V * mk[:, :V.shape[1]], sr44, nperseg=nper, noverlap=nper - hop)
+            outs[k][:, c] = y[:n] if len(y) >= n else np.pad(y, (0, n - len(y)))
+    return outs[0], outs[1]
+
+
+def female_mask_replacement(vocals44: np.ndarray, src_f16: np.ndarray, src_m16: np.ndarray,
+                            sr44: int = 44100, band_hz: float = 3800.0) -> np.ndarray:
+    """Female-only full-band estimate (see :func:`mask_estimates`)."""
+    return mask_estimates(vocals44, src_f16, src_m16, sr44, band_hz)[0]

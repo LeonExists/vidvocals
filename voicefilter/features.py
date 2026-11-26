@@ -290,19 +290,91 @@ class EcapaTaoEmbedder(Embedder):
         free_torch()
 
 
+class WavLMEmbedder(Embedder):
+    """WavLM-Base+ (torchaudio pipeline, MIT; weights from download.pytorch.org).
+
+    Feature = time-mean of the hidden states of each transformer layer, averaged over the
+    given 1-based layers -> 768-d (exactly as eval/extract_features.py + train_gender_head.py:
+    kind ``wavlm_base_plus_L4-5-6_mean``).  Clips shorter than 0.5 s are tiled to 0.5 s.
+    """
+
+    dim = 768
+
+    def __init__(self, layers: Sequence[int] = (4, 5, 6)):
+        self.layers = tuple(int(x) for x in layers)
+        self.kind = "wavlm_base_plus_L" + "-".join(map(str, self.layers)) + "_mean"
+        self.model = None
+
+    @staticmethod
+    def present() -> bool:
+        return modelstore.torchaudio_present("WAVLM_BASE_PLUS")
+
+    @staticmethod
+    def download() -> None:
+        modelstore.torchaudio_bundle("WAVLM_BASE_PLUS").get_model()
+
+    def load(self, device: str) -> None:
+        self.model = modelstore.torchaudio_bundle("WAVLM_BASE_PLUS").get_model().eval().to(device)
+        self.device = device
+
+    def embed_batch(self, clips: list[np.ndarray], min_len: int = 8000) -> np.ndarray:
+        import torch
+
+        out = np.zeros((len(clips), self.dim), np.float32)
+        prepared = []
+        for x in clips:
+            x = np.asarray(x, np.float32)
+            if len(x) < min_len:
+                x = np.tile(x if len(x) else np.zeros(1, np.float32), int(np.ceil(min_len / max(1, len(x)))))[:min_len]
+            prepared.append(x)
+        by_len: dict[int, list[int]] = {}
+        for i, x in enumerate(prepared):
+            by_len.setdefault(len(x), []).append(i)
+        bs = 16 if self.device == "cuda" else 4
+        with torch.inference_mode():
+            for _, ids in by_len.items():
+                for k in range(0, len(ids), bs):
+                    sel = ids[k:k + bs]
+                    t = torch.from_numpy(np.stack([prepared[i] for i in sel])).to(self.device)
+                    hs, _ = self.model.extract_features(t)
+                    # training stored per-layer means as float16, then averaged the layers
+                    m = torch.stack([hs[l - 1].float().mean(1) for l in self.layers], 0)
+                    m = m.cpu().numpy().astype(np.float16).astype(np.float64)
+                    out[sel] = m.mean(0).astype(np.float32)
+        return out
+
+    def unload(self) -> None:
+        self.model = None
+        free_torch()
+
+
 EMBEDDERS = {"ecapa_tao": EcapaTaoEmbedder, "ecapa_tao_vox2_192": EcapaTaoEmbedder}
 
 
+def embedder_for_kind(kind: Optional[str]) -> Optional[str]:
+    """Embedder name for a gender-head embedding kind (None = no embedding needed)."""
+    import re
+
+    if not kind or kind == "none":
+        return None
+    if kind.startswith("ecapa_tao"):
+        return "ecapa_tao"
+    m = re.fullmatch(r"wavlm_base_plus_L([0-9-]+)_mean", kind)
+    if m:
+        return "wavlm:" + m.group(1)
+    raise ValueError(f"unsupported embedding kind {kind!r}")
+
+
 def make_embedder(name: str) -> Embedder:
+    if name.startswith("wavlm"):
+        layers = [int(x) for x in name.split(":", 1)[1].split("-")] if ":" in name else [4, 5, 6]
+        return WavLMEmbedder(layers)
     return EMBEDDERS[name]()
 
 
 # ---------------------------------------------------------------------------
 # gender head (trained by eval/, lives in voicefilter/assets/gender_head.py)
 # ---------------------------------------------------------------------------
-SUPPORTED_EMBEDDINGS = {"ecapa_tao_vox2_192": "ecapa_tao", "none": None}
-
-
 class GenderHead:
     """Wrapper around assets/gender_head.py (``load_head`` -> object with
     ``embedding_kind``, ``compute_features(wav16, sr, emb)``, ``predict_proba(X)``).
@@ -329,10 +401,13 @@ class GenderHead:
                     continue
                 h = self.mod.load_head(c)
                 kind = str(getattr(h, "embedding_kind", "none") or "none")
-                if kind in SUPPORTED_EMBEDDINGS:
-                    self.head, self.embedding_kind, self.path = h, kind, str(c)
-                    self.embedder = SUPPORTED_EMBEDDINGS[kind]
-                    break
+                try:
+                    emb = embedder_for_kind(kind)
+                except ValueError:
+                    continue
+                self.head, self.embedding_kind, self.path = h, kind, str(c)
+                self.embedder = emb
+                break
             if self.head is None:
                 raise FileNotFoundError("no usable gender_head*.npz in assets/")
         except Exception as exc:  # missing or broken head -> pitch fallback

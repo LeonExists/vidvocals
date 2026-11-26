@@ -11,6 +11,9 @@ safetensors>=0.4
 huggingface_hub>=0.23
 transformers>=4.40
 silero-vad>=5.1
+# optional upgrade for overlap separation (SepFormer, weights from Hugging Face); the app
+# falls back to torchaudio ConvTasNet when it is missing or cannot load
+speechbrain>=1.0
 fastapi>=0.110
 uvicorn>=0.29
 python-multipart>=0.0.9

@@ -183,6 +183,10 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
     # ---------------------------------------------------------------- separate
     pr.start("separate", "separating vocals")
     sep_spec = presets.model_spec(P["separation"])
+    sep_spec.update(P.get("separation_params") or {})
+    if sep_spec.get("type") == "ensemble":
+        for m in sep_spec.get("members", []):
+            m.update(P.get("separation_params") or {})
     st = path.stat()
     stamp = {"input": path.name, "size": st.st_size, "mtime": int(st.st_mtime), "frames": n44,
              "model": P["separation"], "spec": json.dumps(sep_spec, sort_keys=True, default=str)}
@@ -216,8 +220,9 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
         notes.append(f"gender head unavailable ({head.error}); using pitch prior only")
     else:
         models_used["gender_head"] = Path(head.path).name
-    emb_name = head.embedder or P.get("embedding", "ecapa_tao")
+    emb_name = P.get("embedding", "ecapa_tao")  # speaker embedding for clustering
     E = np.zeros((nW, 0), np.float32)
+    E_head: Optional[np.ndarray] = None
     if nW:
         try:
             embedder = features.make_embedder(emb_name)
@@ -230,6 +235,21 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
             notes.append(f"speaker embedding failed ({type(exc).__name__}: {exc}); clustering disabled")
             E = np.zeros((nW, 0), np.float32)
         features.free_torch()
+        if head.available and head.embedder:
+            if head.embedder == emb_name and E.shape[1]:
+                E_head = E
+            else:  # the gender head was trained on another embedding (e.g. WavLM)
+                pr.update(0.15, "gender features")
+                try:
+                    he = features.make_embedder(head.embedder)
+                    he.load(dev)
+                    E_head = he.embed_batch(clips)
+                    models_used["head_embedding"] = he.kind
+                    he.unload()
+                    del he
+                except Exception as exc:
+                    notes.append(f"head embedding {head.embedder} failed ({type(exc).__name__}: {exc})")
+                features.free_torch()
     pr.update(0.25, "pitch")
     # pitch track over the events only
     f0 = np.zeros(int(len(x16) / 160) + 1, np.float32)
@@ -246,7 +266,7 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
     if head.available and nW:
         pr.update(0.35, "gender head")
         try:
-            embs = E if (head.embedder and E.shape[1]) else None
+            embs = E_head if head.embedder else None
             if head.embedder and embs is None:
                 raise RuntimeError("head needs embeddings that are unavailable")
             X = head_features_parallel(head, clips, embs, lambda f: pr.update(0.35 + 0.45 * f, "gender head"))
@@ -273,7 +293,7 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
         features.free_torch()
 
     tag = None  # (nW, 4): p_female_speech, p_male_speech, p_speech, p_nonverbal
-    if "tagger" in P.get("gender_models", []) and P.get("tagger") and nW:
+    if P.get("tagger") and nW:  # event kind for every preset; gender cue only if fused
         pr.update(0.9, "sound event tagger")
         try:
             from . import tagger as tagger_mod
@@ -316,7 +336,7 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
         evd["pitch"] = (pp, rel)
         if p_hf is not None:
             evd["hf"] = (float(p_hf[i]), 1.0 if kind == "speech" else 0.6)
-        if tag is not None:
+        if tag is not None and "tagger" in P.get("gender_models", []):
             fs, ms = float(tag[i, 0]), float(tag[i, 1])
             if fs + ms > 1e-3:
                 pt = float(gender.sigmoid(gender.logit(fs, 1e-4) - gender.logit(ms, 1e-4)))
@@ -439,7 +459,7 @@ def analyze_file(path: str | Path, preset: str = "balanced", work_dir: str | Pat
     if P.get("overlap") == "separate" and any(s["overlap"] or s.get("scan") for s in segs):
         try:
             ov_results = _separate_overlaps(work, segs, x16, P, head, emb_name, dev, pr, notes)
-            models_used["overlap_separation"] = P.get("overlap_model")
+            models_used["overlap_separation"] = P.get("_overlap_model_used", P.get("overlap_model"))
         except Exception as exc:
             notes.append(f"overlap separation failed: {type(exc).__name__}: {exc}")
 
@@ -533,9 +553,20 @@ def _separate_overlaps(work: Path, segs: list[dict], x16: np.ndarray, P: dict,
                        notes: list[str]) -> dict[int, dict]:
     import soundfile as sf
 
-    spec = presets.model_spec(P["overlap_model"])
-    sep = overlap.SpeechSeparator(spec, dev)
-    sep.load()
+    sep = None
+    for mid in (P.get("overlap_models") or [P["overlap_model"]]):
+        cand = overlap.SpeechSeparator(presets.model_spec(mid), dev)
+        if not cand.present():
+            continue
+        try:
+            cand.load()
+            sep = cand
+            P["_overlap_model_used"] = mid
+            break
+        except Exception as exc:  # noqa: BLE001
+            notes.append(f"overlap model {mid} failed to load ({type(exc).__name__}: {exc})")
+    if sep is None:
+        raise RuntimeError("no 2-speaker separation model available")
     results: dict[int, dict] = {}
     pad = 0.25
     todo = [i for i, s in enumerate(segs) if s["overlap"] or s.get("scan")]
@@ -570,7 +601,16 @@ def _separate_overlaps(work: Path, segs: list[dict], x16: np.ndarray, P: dict,
             pf_min, pm_max, db_min = (0.5, 0.5, -20.0) if flagged else (0.65, 0.35, -12.0)
             out_pieces, confirmed = [], False
             for k, (a, b, y) in enumerate(pieces):
-                core = [yy[k16:len(yy) - k16] if len(yy) > 2 * k16 + 160 else yy for yy in y]
+                # classify full-band masked estimates (the separator output is band-limited,
+                # which biases pitch/spectral features and embeddings)
+                fv.seek(int(a * media.SR))
+                v44 = fv.read(int((b - a) * media.SR), dtype="float32", always_2d=True)
+                band = 0.95 * min(sep.sr, features.SR16) / 2
+                est = overlap.mask_estimates(v44, y[0], y[1], media.SR, band)
+                import soxr
+
+                e16 = [soxr.resample(e.mean(axis=1), media.SR, features.SR16) for e in est]
+                core = [yy[k16:len(yy) - k16] if len(yy) > 2 * k16 + 160 else yy for yy in e16]
                 if head.available:
                     E2 = emb.embed_batch(core) if emb is not None else None
                     ps = head.predict_many(core, E2)
@@ -584,11 +624,8 @@ def _separate_overlaps(work: Path, segs: list[dict], x16: np.ndarray, P: dict,
                       "rel_db": [round(float(r), 1) for r in rel_db]}
                 if fi != mi and ps[fi] >= pf_min and ps[mi] < pm_max and rel_db.min() > db_min:
                     # one female, one male: full-band female-only replacement for this piece
-                    fv.seek(int(a * media.SR))
-                    v44 = fv.read(int((b - a) * media.SR), dtype="float32", always_2d=True)
-                    rep = overlap.female_mask_replacement(v44, y[fi], y[mi], media.SR)
                     rp = rdir / f"seg{i + 1}_{k}.wav"
-                    sf.write(str(rp), rep, media.SR, subtype="FLOAT")
+                    sf.write(str(rp), est[fi], media.SR, subtype="FLOAT")
                     pc.update(wav=rp.name, p_female=float(ps[fi]),
                               confidence=float(min(abs(2 * ps[fi] - 1), abs(2 * ps[mi] - 1))))
                     confirmed = True

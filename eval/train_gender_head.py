@@ -34,7 +34,8 @@ FEAT = CACHE_DIR / "features" / "all.npz"
 ITEMS = CACHE_DIR / "items.csv"
 ASSETS = Path(__file__).resolve().parents[1] / "voicefilter" / "assets"
 SEED = 1234
-WAVLM_LAYERS_DEFAULT = (4, 5, 6)   # 1-based transformer layers averaged (picked by train CV)
+WAVLM_LAYERS_DEFAULT = (3, 4, 5)   # 1-based transformer layers averaged (picked by train CV)
+MLP_EPOCHS = 40                    # picked by train CV (less over-confident than 200)
 
 
 # ----------------------------------------------------------------------------- data
@@ -121,7 +122,7 @@ def fit_logreg(X, y, w, C):
     return {"w": clf.coef_[0].astype(np.float64), "b": float(clf.intercept_[0])}
 
 
-def fit_mlp(X, y, w, hidden=64, weight_decay=1e-3, epochs=200, lr=3e-3):
+def fit_mlp(X, y, w, hidden=64, weight_decay=1e-3, epochs=MLP_EPOCHS, lr=3e-3):
     import torch
     torch.set_num_threads(2)
     torch.manual_seed(SEED)
@@ -201,16 +202,23 @@ def train_head(d: Data, features: str, model_type: str = "logreg", C: float = 1.
     info = {"features": features, "model_type": model_type, "C": C, "include_nonverbal": include_nonverbal,
             "variants": list(variants), "n_train": int(m.sum()), "n_train_speakers": int(len(set(gtr))),
             "seed": SEED, "trainer": "eval/train_gender_head.py", **{k: v for k, v in kw.items()}}
+    if model_type == "mlp":
+        info.setdefault("epochs", MLP_EPOCHS)
+    if "wavlm" in features:
+        info["wavlm_layers"] = list(wavlm_layers)
     if features.endswith("pitch"):
         raise ValueError("use 'hand' (all 22 handcrafted features) for deployable heads")
     return GenderHead(feature_names=names, embedding_kind=kind, embedding_dim=edim, model_type=model_type,
                       mean=mu, std=sd, params=params, calib_a=a, calib_b=b, info=info)
 
 
+# Chosen with eval/compare_gender_models.py (see eval/GENDER_MODELS.md): the default head is the
+# candidate with the best non-verbal balanced accuracy; ECAPA and no-embedding heads are fallbacks.
 DEFAULT_HEADS = {
-    # file name                 features       model     C
-    "gender_head.npz": ("ecapa+hand", "logreg", 0.3),
-    "gender_head_nofeat.npz": ("hand", "logreg", 1.0),
+    # file name                 features             model     C    WavLM layers
+    "gender_head.npz": ("wavlm+hand", "mlp", 1.0, WAVLM_LAYERS_DEFAULT),
+    "gender_head_ecapa.npz": ("ecapa+hand", "mlp", 1.0, None),
+    "gender_head_nofeat.npz": ("hand", "mlp", 1.0, None),
 }
 
 
@@ -222,9 +230,10 @@ def main() -> None:
     ap.add_argument("--out", default=None)
     a = ap.parse_args()
     d = Data()
-    jobs = {a.out or "custom.npz": (a.features, a.model, a.C)} if a.features else DEFAULT_HEADS
-    for fname, (features, model, C) in jobs.items():
-        head = train_head(d, features, model, C)
+    jobs = {a.out or "custom.npz": (a.features, a.model, a.C, None)} if a.features else DEFAULT_HEADS
+    for fname, (features, model, C, layers) in jobs.items():
+        kw = {"wavlm_layers": layers} if layers else {}
+        head = train_head(d, features, model, C, **kw)
         out = Path(fname) if a.out else ASSETS / fname
         save_head(out, head)
         print("saved", out, head.embedding_kind, head.model_type, json.dumps(head.info),

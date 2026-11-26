@@ -10,9 +10,11 @@ light reverb on some mixes. Hard cases: very short events (<0.4 s), the lowest-p
 female and the highest-pitched male test speakers, breathy categories (sigh/pant/yawn),
 and one background with sung vocals.
 
-A scene "speaker" pairs one test speech speaker with a pool of non-verbal clips from
-test speakers of the same gender in the Deeply corpus (no corpus has both speech and
-non-verbal sounds of the same person); `source_speaker` in truth.json keeps the corpus id.
+About half of the scene speakers are EARS test speakers, whose speech (a regular and a
+whispered sentence) and non-verbal sounds (pain / ecstasy / screams / crying / laughter /
+yelling / yawns / coughs) really come from the same person (70 % own clips). The other
+scene speakers pair a speech-corpus speaker with non-verbal clips of other test speakers of
+the same gender (Deeply / EARS); `source_speaker` per event keeps the corpus id.
 
 Per mix directory (eval/data/mixes/<name>/):
   mix.wav, vocals_female.wav, vocals_male.wav, background.wav   float32 WAV, mix = sum of stems
@@ -42,8 +44,10 @@ from common import CACHE_DIR, DATA_DIR, MIXES_DIR, RAW_DIR, load_audio, load_spl
 
 SR = 44100
 NV_WEIGHTS = {"moaning": 3.0, "panting": 2.0, "sighing": 2.0, "screaming": 1.5, "laughing": 1.5,
-              "crying": 1.5, "yawning": 1.0, "coughing": 0.5, "throat-clearing": 0.5, "sneezing": 0.3}
-BREATHY = {"sighing", "panting", "yawning"}
+              "crying": 1.5, "yawning": 1.0, "coughing": 0.5, "throat-clearing": 0.5, "sneezing": 0.3,
+              "ears_pain": 3.0, "ears_ecstasy": 3.0, "ears_screaming": 1.5, "ears_crying": 1.5,
+              "ears_laughing": 1.5, "ears_yelling": 1.0, "ears_yawning": 1.0, "ears_coughing": 0.5}
+BREATHY = {"sighing", "panting", "yawning", "ears_yawning", "ears_whisper"}
 ESC_NOISE = ["rain", "sea_waves", "crackling_fire", "wind", "water_drops", "pouring_water", "vacuum_cleaner",
              "washing_machine", "clock_tick", "keyboard_typing", "door_wood_knock", "engine", "train",
              "airplane", "church_bells", "chirping_birds", "thunderstorm", "toilet_flush", "footsteps", "dog"]
@@ -59,7 +63,10 @@ class Pools:
         self.speech = defaultdict(lambda: defaultdict(list))   # gender -> speaker -> rows
         self.digits = defaultdict(list)                        # gender -> rows (AudioMNIST)
         self.nv = defaultdict(lambda: defaultdict(list))       # gender -> category -> rows
+        self.own_nv = defaultdict(list)                        # EARS speaker -> own non-verbal rows
         for r in test:
+            if r["source"] == "ears" and r["kind"] == "nonverbal":
+                self.own_nv[r["speaker"]].append(r)
             if r["kind"] == "speech" and r["source"] == "audiomnist":
                 self.digits[r["gender"]].append(r)
             elif r["kind"] == "speech":
@@ -222,12 +229,22 @@ def background(kind: str, n: int, rng: np.random.Generator, prng: random.Random)
 
 
 # ----------------------------------------------------------------------------- scenes
-def pick_nv(pools: Pools, gender: str, prng: random.Random, used: set, breathy: bool = False) -> dict:
-    cats = [c for c in NV_WEIGHTS if pools.nv[gender][c]]
+def pick_nv(pools: Pools, gender: str, prng: random.Random, used: set, breathy: bool = False,
+            own: list | None = None, exclude: set | None = None) -> dict:
+    """Non-verbal clip: from the speaker's own EARS clips when available (70 %), else from the pool of
+    test speakers of that gender (excluding EARS speakers that are themselves in the scene)."""
+    if own and prng.random() < 0.7:
+        bycat = defaultdict(list)
+        for r in own:
+            bycat[r["category"]].append(r)
+    else:
+        bycat = {c: [r for r in rows if r["speaker"] not in (exclude or set())]
+                 for c, rows in pools.nv[gender].items()}
+    cats = [c for c in NV_WEIGHTS if bycat.get(c)]
     if breathy:
         cats = [c for c in cats if c in BREATHY] or cats
     cat = prng.choices(cats, weights=[NV_WEIGHTS[c] for c in cats])[0]
-    rows = pools.nv[gender][cat]
+    rows = bycat[cat]
     fresh = [r for r in rows if r["clip_id"] not in used] or rows
     r = prng.choice(sorted(fresh, key=lambda r: r["clip_id"]))
     used.add(r["clip_id"])
@@ -256,7 +273,8 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
     used_spk, used_nv = set(), set()
     for k, g in enumerate(genders):
         cands = sorted(s for s in pools.speech[g] if s not in used_spk)
-        spk = prng.choice(cands)
+        ears = [s for s in cands if s.startswith("ears:")]
+        spk = prng.choice(ears if ears and prng.random() < 0.5 else [s for s in cands if s not in ears] or cands)
         if k == 0 and g == "F" and idx % 4 == 2:
             spk = min((s for s in cands if np.isfinite(f0.get(s, np.nan))), key=lambda s: f0[s])
             hard.append(f"low_pitched_female:{spk}:{f0[spk]:.0f}Hz")
@@ -266,7 +284,9 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
         used_spk.add(spk)
         speakers.append({"id": f"S{k + 1}", "gender": g, "source_speaker": spk, "f0_median": f0.get(spk),
                          "gain_db": prng.uniform(-4, 4), "pan": prng.uniform(-0.5, 0.5),
-                         "clips": sorted(pools.speech[g][spk], key=lambda r: r["clip_id"])})
+                         "clips": sorted(pools.speech[g][spk], key=lambda r: r["clip_id"]),
+                         "own_nv": pools.own_nv.get(spk, [])})
+    scene_ears = {s["source_speaker"] for s in speakers if s["own_nv"]}
     reverb = idx % 3 == 1 and not script
     rirs = {s["id"]: synth_rir(rng, prng.uniform(0.3, 0.9)) for s in speakers} if reverb else {}
     wet = prng.uniform(0.25, 0.5) if reverb else 0.0
@@ -303,7 +323,7 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
                 y = trim(pools.audio(row))
                 kind, cat = "speech", "short_digit"
             else:
-                row = pick_nv(pools, g, prng, used_nv)
+                row = pick_nv(pools, g, prng, used_nv, own=spk["own_nv"], exclude=scene_ears)
                 y = trim(pools.audio(row))
                 kind, cat = "nonverbal", f"short_{row['category']}"
             L = int(prng.uniform(0.15, 0.4) * SR)
@@ -320,7 +340,8 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
         elif r < 0.45:  # non-verbal burst: 1-3 sounds from the same speaker
             clips = []
             for _ in range(1 if scripted else prng.choice([1, 1, 2, 3])):
-                row = pick_nv(pools, g, prng, used_nv, breathy=prng.random() < 0.25)
+                row = pick_nv(pools, g, prng, used_nv, breathy=prng.random() < 0.25, own=spk["own_nv"],
+                              exclude=scene_ears)
                 y = trim(pools.audio(row))[: int(6 * SR)]
                 clips.append((y, "nonverbal", row["category"], row))
         else:
@@ -408,7 +429,7 @@ def build_scene(idx: int, seed: int, pools: Pools, f0: dict, out_dir: Path, dura
     fm = _frame_classes(events, T)
     vocal_frames = (fm > 0).sum()
     truth = {"name": out_dir.name, "duration": round(n / SR, 6), "sr": SR, "events": events,
-             "speakers": [{k: v for k, v in s.items() if k != "clips"} for s in speakers],
+             "speakers": [{k: v for k, v in s.items() if k not in ("clips", "own_nv")} for s in speakers],
              "meta": {"seed": seed, "index": idx, "composition": comp, "n_speakers": ns, "background": bg_info,
                       "snr_db": round(snr, 2), "reverb": reverb, "wet": round(wet, 3), "hard_cases": hard,
                       "female_active_s": round(dur_f, 2), "male_active_s": round(dur_m, 2),

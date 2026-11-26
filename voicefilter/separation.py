@@ -171,7 +171,7 @@ class RoformerBackend(TorchBackend):
         self.model = roformer.build_and_load(mtype, mcfg, ckpt).to(self.device)
         self.chunk = int(self.spec.get("chunk_size") or audio.get("chunk_size") or 352800)
         self.num_overlap = int(self.spec.get("num_overlap") or inf.get("num_overlap") or 2)
-        self.num_overlap = max(2, min(self.num_overlap, 4))
+        self.num_overlap = max(1, min(self.num_overlap, 8))
         self.batch_size = int(self.spec.get("batch_size") or (2 if self.device == "cuda" else 1))
         instruments = list(tr.get("instruments") or [])
         target = (self.spec.get("target") or tr.get("target_instrument") or
@@ -321,7 +321,9 @@ def separate_file(mix_wav: str | Path, vocals_wav: str | Path, background_wav: s
             raise ValueError(f"mix must be {backend.sr} Hz")
         n = fin.frames
         C = int(backend.chunk)
-        step = max(1, C // int(backend.num_overlap))
+        no = int(backend.num_overlap)
+        # num_overlap 1: chunks still overlap by 10 % so the seams are crossfaded
+        step = max(1, int(C * 0.9) if no <= 1 else C // no)
         fade = C - step
         pad = fade
         total = pad + n + pad
@@ -445,7 +447,7 @@ def run_separation(mix_wav: str | Path, vocals_wav: str | Path, background_wav: 
     backend = make_backend(spec, device)
     t0 = time.time()
     if progress:
-        progress(0.0, f"loading {backend.name}")
+        progress(0.0, "Separating vocals (loading model)")
     backend.load()
     load_s = time.time() - t0
     try:

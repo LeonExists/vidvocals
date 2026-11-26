@@ -34,7 +34,7 @@ ITEMS_CSV = CACHE_DIR / "items.csv"
 MAX_FULL = 3.0
 CROP_MIN, CROP_MAX = 0.25, 1.5
 PER_SPEAKER = {  # (train, test) clips per speaker, by source
-    "librispeech": (3, 3), "crowd": (2, 3), "crema": (3, 3), "audiomnist": (2, 3), "deeply": (99, 99),
+    "librispeech": (3, 3), "crowd": (2, 3), "crema": (3, 3), "audiomnist": (2, 3), "deeply": (99, 99), "ears": (99, 99),
 }
 NONPHONATED = {"teeth-chattering", "teeth-grinding", "tongue-clicking", "lip-popping", "lip-smacking",
                "nose-blowing"}
@@ -103,7 +103,18 @@ def cut(y: np.ndarray, item: dict, sr: int = 16000) -> tuple[np.ndarray, float]:
     return y[s:s + m], s / sr
 
 
-def run_shard(shard: int, nshards: int, use_wavlm: bool, use_ecapa: bool = True) -> None:
+def _load_cache() -> dict:
+    """Previously merged features (all.npz), used so a later pass only computes what is missing."""
+    p = FEAT_DIR / "all.npz"
+    if not p.exists():
+        return {}
+    z = np.load(p, allow_pickle=False)
+    ids = [str(i) for i in z["item_id"]]
+    arrays = {k: z[k] for k in z.files}
+    return {i: {k: arrays[k][j] for k in arrays if k != "item_id"} for j, i in enumerate(ids)}
+
+
+def run_shard(shard: int, nshards: int, use_wavlm: bool, use_ecapa: bool = True, prefix: str = "shard") -> None:
     import torch
     setup_env()
     torch.set_num_threads(2)
@@ -112,7 +123,8 @@ def run_shard(shard: int, nshards: int, use_wavlm: bool, use_ecapa: bool = True)
     if shard == 0:
         write_items(items)
     mine = items[shard::nshards]
-    out = FEAT_DIR / f"shard_{shard}of{nshards}.npz"
+    out = FEAT_DIR / f"{prefix}_{shard}of{nshards}.npz"
+    cache = _load_cache() if prefix != "shard" else {}
     done = {}
     if out.exists():
         z = np.load(out, allow_pickle=False)
@@ -144,13 +156,16 @@ def run_shard(shard: int, nshards: int, use_wavlm: bool, use_ecapa: bool = True)
             audio_cache.clear()
             audio_cache[p] = load_audio(DATA_DIR / p)
         y, start = cut(audio_cache[p], it)
+        c = cache.get(it["item_id"], {})
         res["item_id"].append(it["item_id"])
         res["start"].append(start)
         res["dur"].append(len(y) / 16000)
-        res["hand"].append(handcrafted_features(y, 16000))
+        res["hand"].append(c["hand"] if "hand" in c else handcrafted_features(y, 16000))
         if ecapa is not None:
-            res["ecapa"].append(embed(ecapa, y))
-        if wavlm is not None:
+            res["ecapa"].append(c["ecapa"] if "ecapa" in c else embed(ecapa, y))
+        if wavlm is not None and "wavlm" in c:
+            res["wavlm"].append(c["wavlm"])
+        elif wavlm is not None:
             yy = y if len(y) >= 8000 else np.tile(y, int(np.ceil(8000 / max(1, len(y)))))[:8000]
             with torch.inference_mode():
                 hs, _ = wavlm.extract_features(torch.from_numpy(yy)[None])
@@ -173,7 +188,7 @@ def _save(out: Path, res: dict) -> None:
 
 
 def merge() -> Path:
-    parts = sorted(FEAT_DIR.glob("shard_*of*.npz"))
+    parts = sorted(FEAT_DIR.glob("v2_*of*.npz")) or sorted(FEAT_DIR.glob("shard_*of*.npz"))
     keys = None
     acc = defaultdict(list)
     for p in parts:
@@ -199,6 +214,8 @@ def main() -> None:
     ap.add_argument("--wavlm", action="store_true")
     ap.add_argument("--no-ecapa", action="store_true")
     ap.add_argument("--merge", action="store_true")
+    ap.add_argument("--pass2", action="store_true",
+                    help="second pass: reuse eval/cache/features/all.npz, compute only missing features")
     ap.add_argument("--list", action="store_true", help="only write items.csv and print counts")
     a = ap.parse_args()
     if a.merge:
@@ -213,7 +230,7 @@ def main() -> None:
             print(k, c[k])
         print(len(items))
         return
-    run_shard(a.shard, a.nshards, a.wavlm, not a.no_ecapa)
+    run_shard(a.shard, a.nshards, a.wavlm, not a.no_ecapa, prefix="v2" if a.pass2 else "shard")
 
 
 if __name__ == "__main__":

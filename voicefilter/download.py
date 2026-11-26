@@ -28,6 +28,10 @@ def model_present(mid: str) -> bool:
             return EcapaTaoEmbedder.present()
         if t == "torchaudio":
             return modelstore.torchaudio_present(spec["bundle"])
+        if t == "speechbrain_sepformer":
+            from .overlap import SpeechSeparator
+
+            return SpeechSeparator(spec).present()
         if t == "hf_audio_classification":
             from .features import HFGenderModel
 
@@ -55,6 +59,10 @@ def model_download(mid: str) -> None:
         EcapaTaoEmbedder.download()
     elif t == "torchaudio":
         modelstore.torchaudio_bundle(spec["bundle"]).get_model()
+    elif t == "speechbrain_sepformer":
+        from .overlap import SpeechSeparator
+
+        SpeechSeparator(spec).download()
     elif t == "hf_audio_classification":
         from .features import HFGenderModel
 
@@ -71,10 +79,20 @@ def preset_models(pid: str) -> tuple[list[str], list[str]]:
     """(required, optional) model ids of a preset."""
     p = presets.get_preset(pid)
     req = [p["separation"], p.get("embedding", "ecapa_tao")]
-    if p.get("overlap") == "separate" and p.get("overlap_model"):
-        req.append(p["overlap_model"])
     opt = []
-    if p.get("tagger") and "tagger" in p.get("gender_models", []):
+    if p.get("overlap") == "separate":
+        for m in p.get("overlap_models") or [p.get("overlap_model")]:
+            if m:
+                (opt if presets.model_spec(m).get("optional") else req).append(m)
+    try:  # the gender head may need its own embedding model (e.g. WavLM-Base+)
+        from .features import GenderHead
+
+        emb = GenderHead().embedder
+        if emb and emb.startswith("wavlm"):
+            req.append("wavlm_base_plus")
+    except Exception:
+        pass
+    if p.get("tagger"):  # kind labels for every preset, gender cue only where fused
         # GitHub-hosted taggers are required, HF-only ones optional
         (req if presets.model_spec(p["tagger"]).get("type") == "efficientat" else opt).append(p["tagger"])
     if p.get("hf_gender") and "hf" in p.get("gender_models", []):
