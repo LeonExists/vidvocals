@@ -184,6 +184,29 @@ def write_report(res: dict, d: Data) -> None:
          "`speechbrain/spkrec-ecapa-voxceleb` embeddings. Substitutes: the ECAPA-TDNN of "
          "TaoRuijie/ECAPA-TDNN (GitHub, MIT; VoxCeleb2-trained, 192-d, the same backbone JaesungHuh fine-tuned) "
          "and WavLM Base+ from torchaudio (download.pytorch.org).", ""]
+    def g(n, sl, k="bacc"):
+        return res.get(n, {}).get("slices", {}).get(sl, {}).get(k)
+    L += ["## Summary", "",
+          "- **Shipped default** `voicefilter/assets/gender_head.npz` = `wavlm+hand_mlp`: test balanced accuracy "
+          f"speech {fmt(g('wavlm+hand_mlp', 'speech (all)'))} % (clips >1.5 s: "
+          f"{fmt(g('wavlm+hand_mlp', 'speech dur >1.5s'))} %), phonated non-verbal "
+          f"{fmt(g('wavlm+hand_mlp', 'non-verbal phonated (all)'))} % (EARS {fmt(g('wavlm+hand_mlp', 'non-verbal src=ears'))} %, "
+          f"Deeply {fmt(g('wavlm+hand_mlp', 'non-verbal src=deeply'))} %). Chosen by non-verbal balanced accuracy; the "
+          "speaker-grouped CV on train speakers gives the same ranking, so the choice is not tuned on test.",
+          f"- Fallbacks: `gender_head_ecapa.npz` = `ecapa+hand_mlp` (speech {fmt(g('ecapa+hand_mlp', 'speech (all)'))} / "
+          f"non-verbal {fmt(g('ecapa+hand_mlp', 'non-verbal phonated (all)'))}), `gender_head_nofeat.npz` = `hand_mlp` "
+          f"(speech {fmt(g('hand_mlp', 'speech (all)'))} / non-verbal {fmt(g('hand_mlp', 'non-verbal phonated (all)'))}).",
+          f"- **Speech-trained classifiers fail on non-verbal sounds**: the pitch rule drops from "
+          f"{fmt(g('pitch_165', 'speech (all)'))} % (speech) to {fmt(g('pitch_165', 'non-verbal phonated (all)'))} % "
+          f"(non-verbal; it calls almost every male scream/cry/laugh female: male recall EARS "
+          f"{fmt(g('pitch_165', 'non-verbal src=ears gender=M'))} %), and the same WavLM head trained on speech only "
+          f"reaches {fmt(g('wavlm+hand[speech-only]', 'non-verbal phonated (all)'))} % vs "
+          f"{fmt(g('wavlm+hand_mlp', 'non-verbal phonated (all)'))} % when non-verbal clips are in training.",
+          "- Short segments are harder: see the duration rows (<0.5 s is ~10 points worse than >1.5 s).",
+          "- Non-phonated mouth/nose noises (clicks, lip smacks, teeth, nose blowing) are at chance for every model: "
+          "they carry no usable gender information; the pipeline should treat them as low-confidence.",
+          "- Male non-verbal clips are the minority (test: Deeply 45, EARS 21 speakers x 8 sounds), so male-side "
+          "numbers have wide error bars (about +-5 points at 95 %).", ""]
     main_slices = ["speech (all)", "non-verbal phonated (all)", "non-verbal non-phonated (clicks etc.)"]
     L += ["## Headline: speech vs non-verbal", "",
           "| model | " + " | ".join(f"{s} acc / bacc / AUC / ECE" for s in main_slices)
