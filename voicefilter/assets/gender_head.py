@@ -14,8 +14,10 @@ Typical backend use:
 
 `compute_features` computes the non-embedding features exactly as in training, so the
 backend must not re-implement them. Embedding kinds:
-    "ecapa_tao_vox2_192" -> voicefilter.assets.ecapa_tao.embed(load_ecapa(), wav)
-    "none"               -> pass embedding=None (pitch/spectral-only fallback head)
+    "wavlm_base_plus_L3-4-5_mean" -> voicefilter.assets.wavlm_feat.embed_for_head(load_wavlm(), wav, kind)
+                                     (default gender_head.npz)
+    "ecapa_tao_vox2_192"          -> voicefilter.assets.ecapa_tao.embed(load_ecapa(), wav) (gender_head_ecapa.npz)
+    "none"                        -> pass embedding=None (gender_head_nofeat.npz)
 """
 from __future__ import annotations
 
